@@ -175,9 +175,9 @@ def create_cluster(mem_count, ebs_count, func_count, coord_count,
 
     routing_svc_addr = util.get_service_address(client, 'routing-service')
     management_svc_addr = util.get_service_address(client, 'management-service')
-    print('The routing service can be accessed here: \n\t%s' %
+    print('Anna the kvs service can be accessed here: \n\t%s' %
           (routing_svc_addr))
-    print('The management service can be accessed here: \n\t%s' %
+    print('Pheromone can be accessed here: \n\t%s' %
           (management_svc_addr))
 
 

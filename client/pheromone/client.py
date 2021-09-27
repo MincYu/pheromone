@@ -4,6 +4,7 @@ import zmq
 import socket
 from utils import *
 from proto.operation_pb2 import *
+from proto.common_pb2 import *
 import numpy as np
 import time
 from anna.client import AnnaTcpClient
@@ -184,9 +185,7 @@ class PheromoneClient():
         pass
 
     def register_app(self, app_name, functions, dependencies=[]):
-        # TODO support dependency parsing
         coord_thread = self._try_get_app_coord(app_name)
-        # coord_thread = OperationThread('18.209.49.139', 0)
         msg = AppRegistration()
         msg.app_name = app_name
         for func in functions:
@@ -250,26 +249,6 @@ class PheromoneClient():
                     return None
                 else:
                     raise e
-
-        # send_sock = self.pusher_cache.get(coord_thread.call_connect_address())
-        # for _ in range(times):
-        #     send_request(call, send_sock)
-    
-    def call_func_test(self, max_number, times=1):
-        call = FunctionCall()
-        random_index = np.random.randint(max_number, size=times)
-        
-        elapsed = []
-        start_t = time.time()
-        for i in random_index:
-            app = f'app_{i}'
-            call.name = f'func_{i}'
-            call.app_name = app
-            self.pusher_cache.send(self._try_get_app_coord(app).call_connect_address(), call)
-            cur_t = time.time()
-            elapsed.append(cur_t - start_t)
-            start_t = cur_t
-        print(np.average(elapsed), np.percentile(elapsed, 50), np.percentile(elapsed, 99))
 
     def _try_get_app_coord(self, app_name):
         if app_name not in self.app_coords:
