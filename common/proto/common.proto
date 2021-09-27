@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+enum KVSError {
+  // The request did not have an error.
+  SUCCESS = 0;
+
+  // The requested bucket/key does not exist, which are given by coordinator.
+  BUCKET_NE = 1;
+  KEY_NE = 2;
+  SESSION_NE = 3;
+
+  // The remote servers have no (requested) data, which are given by remote KVS.
+  KVS_ND = 4;
+
+  // The value type does not match.
+  TYPE_NM = 5;
+
+  // the bucket exists, which may be caused by bucket creation.
+  BUCKET_EXIST = 6;
+
+  // The request timed out.
+  REQ_TIMEOUT = 7;
+
+}
+
+enum ValueType { 
+  // No session
+  NORMAL = 0;
+
+  // Session-Aware
+  SESSION = 1;
+}
+
+// A protobuf to represent an individual key, both for requests and responses. 
+message BucketKeyTuple {
+  // The key name for this request/response.
+  string bucket = 1;
+
+  string key = 2;
+
+  ValueType value_type = 3;
+
+  string session = 4;
+
+  bytes payload = 5;
+
+  // KVSError error = 6;
+
+  // // The number of server addresses the client is aware of for a particular
+  // // key; used for DHT membership change optimization.
+  // uint32 address_cache_size = 6;
+  
+  // // A boolean set by the server if the client's address_cache_size does not
+  // // match the metadata stored by the server.
+  // bool invalidate = 7;
+}
+
+
+message BucketKeyAddress {
+  ValueType value_type = 1;
+
+  // The specified key.
+  string bucket = 2;
+  
+  string key = 3;
+
+  string session = 4;
+  
+  // The IPs of the set of servers responsible for this key.
+  repeated string ips = 5;
+
+  // uint32 count = 6;
+  bytes payload = 6;
+}

@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+// COPY FROM CLOUDBURST PROTO 
+// TODO merge
+package cloudburst;
+// An enum representing the different types of serializers used primarily for
+// Python values.
+enum SerializerType {
+    // The default serializer type, which is cloudpickle.
+    DEFAULT = 0;
+  
+    // The numpy serializer uses PyArrow for maximum efficiency.
+    NUMPY = 1;
+  
+    // A serializer to manage UTF-8 strings.
+    STRING = 2;
+}
+
+message Value {
+    // The serialized version of the data.
+    bytes body = 1;
+  
+    // The serializer used to create the body; if none is specified, the enum
+    // uses DEFAULT.
+    SerializerType type = 2;
+}
+
+// A list of Values that represents the arguments for a particular function
+// call.
+message Arguments {
+    // The set of arguments.
+    repeated Value values = 1;
+}
+
+enum CallSource {
+    // From Cloudburst client
+    CLIENT = 0;
+  
+    // Triggered by ephemeral storage
+    STORAGE = 1;
+}
+
+// The consistency mode to be used with an individual request.
+enum ConsistencyType {
+    // Normal consistency means that any non-causal lattice types are supported
+    // -- sets, last writer wins, etc.
+    NORMAL = 0;
+  
+    // Single-key causal mode is supported (see Anna KVS definitions for more
+    // detail).
+    SINGLE = 1;
+  
+    // Multi-key causal more is supported (see Anna KVS definitions for more
+    // detail).
+    MULTI = 2;
+}
+
+// A request to execute a pre-registered function a single time.
+message FunctionCall {
+    // The name of the fucntion to execute.
+    string name = 1;
+  
+    // A unique ID used to match asynchronous requests to responses.
+    uint32 request_id = 2;
+  
+    // The arguments to be passed into the function.
+    Arguments arguments = 3;
+  
+    // An optional field that allows the user to specify where the server should
+    // store the result of the request. If none is specified, one is
+    // automatically generated and returned to the user.
+    string response_key = 4;
+  
+    // Specify what consistency mode this function should be executed in.
+    ConsistencyType consistency = 5;
+
+    repeated string locations = 6;
+
+    // Indicating the source of the function call
+    CallSource source_hint = 7;
+}
+
+

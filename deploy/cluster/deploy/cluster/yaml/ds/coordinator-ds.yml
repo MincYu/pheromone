@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: coordinator-nodes
+  labels:
+    role: coordinator
+spec:
+  selector:
+    matchLabels:
+      role: coordinator
+  template:
+    metadata:
+      labels:
+        role: coordinator
+    spec:
+      nodeSelector:
+        role: coordinator
+      hostNetwork: true
+      hostIPC: true
+      containers:
+      - name: coordinator-container
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: ROUTE_ADDR
+          value: ROUTE_ADDR_DUMMY
+        - name: MANAGEMENT
+          value: MANAGEMENT_DUMMY
+        - name: COORD_THREADS
+          value: "3"
+        - name: IO_THREADS
+          value: "1"
+        - name: ROLE
+          value: coordinator

@@ -1,0 +1,283 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: function-nodes
+  labels:
+    role: function
+spec:
+  selector:
+    matchLabels:
+      role: function
+  template:
+    metadata:
+      labels:
+        role: function
+    spec:
+      nodeSelector:
+        role: function
+      restartPolicy: Always
+      volumes:
+      - emptyDir:
+          medium: Memory
+          sizeLimit: 12G
+        name: cache-volume
+      hostNetwork: true
+      hostIPC: true
+      containers:
+      - name: function-1
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "0"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-2
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "1"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-3
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "2"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-4
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "3"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-5
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "4"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-6
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "5"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-7
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "6"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-8
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "7"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-9
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "8"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-10
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "9"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-11
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "10"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-12
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "11"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-13
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "12"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-14
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "13"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-15
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "14"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-16
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "15"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-17
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "16"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-18
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "17"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-19
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "18"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-20
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "19"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: local-sched
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        resources:
+          limits:
+            cpu: "1"
+            memory: "2G"
+        env:
+        - name: COORD_IPS
+          value: COORD_IPS_DUMMY
+        - name: ROUTE_ADDR
+          value: ROUTE_ADDR_DUMMY
+        - name: ROLE
+          value: scheduler
+        - name: COORD_THREADS
+          value: "3"
+        - name: IO_THREADS
+          value: "1"
+        - name: DELAY
+          value: "6000"
+        - name: FORWARD_REJECT
+          value: "1"
+        - name: EXECUTOR_NUM
+          value: "20"
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm

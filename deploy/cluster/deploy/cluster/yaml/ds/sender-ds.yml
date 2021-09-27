@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sender-nodes
+  labels:
+    role: sender
+spec:
+  selector:
+    matchLabels:
+      role: sender
+  template:
+    metadata:
+      labels:
+        role: sender
+    spec:
+      nodeSelector:
+        role: sender
+      restartPolicy: Always
+      hostNetwork: true
+      hostIPC: true
+      containers:
+      - name: client
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: COORD_IPS
+          value: COORD_IPS_DUMMY
+        - name: MANAGEMENT
+          value: MANAGEMENT_DUMMY
+        command: ["sleep"]
+        args: ["infinity"]

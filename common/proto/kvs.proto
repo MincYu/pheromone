@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+import "common.proto";
+
+enum KeyRequestType {
+  // fetch remote data (tmp).
+  FETCH = 0;
+
+  // // A request to put data into the KVS.
+  // PUT = 1;
+}
+
+enum HelperResponseType { 
+  // remote Get reponse
+  REMOTE_GET = 0;
+
+  // put notifying reponse
+  NOTIF_PUT = 1;
+
+  // TODO prefetching..
+}
+
+message KeyQueryRequest {
+  // The IP-port pair at which the client will await a response.
+  string response_address = 1;
+
+  // The names of the requested keys.
+  repeated BucketKeyAddress addresses = 2;
+
+  // A unique ID used by the client to match asynchornous requests with
+  // responses.
+  string request_id = 3;
+}
+
+message KeyQueryResponse {
+
+  // A batch of responses for individual keys.
+  repeated BucketKeyAddress addresses = 1;
+
+  // An error reported by the routing tier.
+  KVSError error = 2;
+
+  // A unique ID used by the client to match asynchronous requests with
+  // responses.
+  string response_id = 3;
+}
+
+message KeyNotifyRequest {
+  // The IP-port pair at which the client will await a response.
+  string response_address = 1;
+
+  // The names of the requested keys.
+  repeated BucketKeyAddress addresses = 2;
+
+  repeated string active_trigger_names = 3;
+
+    // A unique ID used by the client to match asynchornous requests with
+  // responses.
+  string request_id = 4;
+}
+
+message KeyNotifyResponse {
+  KVSError error = 1;
+
+  repeated uint32 key_counts = 2;
+
+  // A unique ID used by the client to match asynchronous requests with
+  // responses.
+  string response_id = 3;
+}

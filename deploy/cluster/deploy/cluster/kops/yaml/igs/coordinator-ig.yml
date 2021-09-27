@@ -1,0 +1,17 @@
+apiVersion: kops/v1alpha2
+kind: InstanceGroup
+metadata:
+  labels:
+    kops.k8s.io/cluster: CLUSTER_NAME
+  name: coordinator-instances
+spec:
+  image: kope.io/k8s-1.17-debian-stretch-amd64-hvm-ebs-2020-01-17
+  machineType: c5.xlarge
+  maxSize: MAX_DUMMY
+  minSize: MIN_DUMMY
+  rootVolumeSize: 32
+  role: Node
+  nodeLabels:
+    role: coordinator
+  subnets:
+    - us-east-1a

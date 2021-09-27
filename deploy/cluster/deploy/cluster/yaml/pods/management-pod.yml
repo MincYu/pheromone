@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: management-pod
+  labels:
+    role: management
+spec:
+  restartPolicy: Never
+  containers:
+  - name: management-container
+    image: cheneyyu/pheromone
+    env:
+    - name: AWS_ACCESS_KEY_ID
+      value: ACCESS_KEY_ID_DUMMY
+    - name: AWS_SECRET_ACCESS_KEY
+      value: SECRET_KEY_DUMMY
+    - name: KOPS_STATE_STORE
+      value: KOPS_BUCKET_DUMMY
+    - name: PHERO_CLUSTER_NAME
+      value: CLUSTER_NAME
+    - name: ROLE
+      value: manager
+    - name: EXTERNAL_USER
+      value: "1"
+  nodeSelector:
+    role: general
