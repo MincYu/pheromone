@@ -6,7 +6,7 @@ Pheromone applies two-level distributed scheduling for low-latency function invo
 ![Pheromone Architecture](https://github.com/MincYu/pheromone/blob/main/architecture.jpg?raw=true)
 
 The key design of Pheromone lies in data-centric function orchestration, which lets data trigger functions by making the consuming patterns of intermediate data (i.e., function results) explicit.
-Please see our paper for more details (released soon).
+Please see [our paper](https://arxiv.org/abs/2109.13492) for more details.
 
 ## Getting Started
 

@@ -19,16 +19,12 @@ spec:
       volumes:
       - emptyDir:
           medium: Memory
-          sizeLimit: 10G
+          sizeLimit: 12G
         name: cache-volume
       hostNetwork: true
       hostIPC: true
       containers:
       - name: function-1
-        resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -41,9 +37,6 @@ spec:
           mountPath: /dev/shm
       - name: function-2
         resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -55,10 +48,6 @@ spec:
         - name: cache-volume
           mountPath: /dev/shm
       - name: function-3
-        resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -71,9 +60,6 @@ spec:
           mountPath: /dev/shm
       - name: function-4
         resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -85,10 +71,6 @@ spec:
         - name: cache-volume
           mountPath: /dev/shm
       - name: function-5
-        resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -101,9 +83,6 @@ spec:
           mountPath: /dev/shm
       - name: function-6
         resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -115,10 +94,6 @@ spec:
         - name: cache-volume
           mountPath: /dev/shm
       - name: function-7
-        resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -131,9 +106,6 @@ spec:
           mountPath: /dev/shm
       - name: function-8
         resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -145,10 +117,6 @@ spec:
         - name: cache-volume
           mountPath: /dev/shm
       - name: function-9
-        resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -161,9 +129,6 @@ spec:
           mountPath: /dev/shm
       - name: function-10
         resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -175,10 +140,6 @@ spec:
         - name: cache-volume
           mountPath: /dev/shm
       - name: function-11
-        resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -191,9 +152,6 @@ spec:
           mountPath: /dev/shm
       - name: function-12
         resources:
-          limits:
-            cpu: "1"
-            memory: "1.2G"
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         env:
@@ -204,13 +162,105 @@ spec:
         volumeMounts:
         - name: cache-volume
           mountPath: /dev/shm
+      - name: function-13
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "12"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-14
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "13"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-15
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "14"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-16
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "15"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-17
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "16"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-18
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "17"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-19
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "18"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
+      - name: function-20
+        resources:
+        image: cheneyyu/pheromone
+        imagePullPolicy: Always
+        env:
+        - name: THREAD_ID
+          value: "19"
+        - name: ROLE
+          value: executor
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /dev/shm
       - name: local-sched
         image: cheneyyu/pheromone
         imagePullPolicy: Always
         resources:
           limits:
-            cpu: "2"
-            memory: "10G"
+            cpu: "1"
+            memory: "2G"
         env:
         - name: COORD_IPS
           value: COORD_IPS_DUMMY
@@ -219,15 +269,15 @@ spec:
         - name: ROLE
           value: scheduler
         - name: COORD_THREADS
-          value: "1"
+          value: "3"
         - name: IO_THREADS
           value: "1"
-        - name: EXECUTOR_NUM
-          value: "11"
         - name: DELAY
-          value: "0"
-        - name: SHARED
-          value: "0"
+          value: "6000"
+        - name: FORWARD_REJECT
+          value: "1"
+        - name: EXECUTOR_NUM
+          value: "20"
         volumeMounts:
         - name: cache-volume
           mountPath: /dev/shm
