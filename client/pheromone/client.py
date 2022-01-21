@@ -218,6 +218,7 @@ class PheromoneClient():
         # call.name = name
         call.app_name = app_name
         call.request_id = self._get_request_id()
+        call.sync_data_status = False
         for func, args in func_args:
             func_req = call.requests.add()
             func_req.name = func

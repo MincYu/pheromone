@@ -55,10 +55,24 @@ struct BucketKey {
    * return the key name used in shared memory
    */ 
   string shm_key_name() const {
-    return bucket_ + "|" + key_;
+    return bucket_ + "|" + key_ + session_;
   }
 
 };
+
+inline BucketKey get_bucket_key_from_string(string &key_name) {
+  auto splitter_index = key_name.find("|");
+  string key = key_name.substr(splitter_index + 1)
+  string session = "";
+  auto key_size = key.size();
+  if ( key_size > 16) {
+    session = key.substr(key_size - 16);
+    key = key.substr(0, key_size - 16);
+  }
+  BucketKey bucket_key(key_name.substr(0, splitter_index), key, session);
+  return bucket_key;
+}
+
 
 inline BucketKeyTuple* get_tuple_from_bucket_key(const BucketKey &bucket_key, BucketKeyTuple *tp) {
   tp->set_bucket(bucket_key.bucket_);
@@ -111,9 +125,9 @@ const char alpha_num[] =
       "0123456789"
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
       "abcdefghijklmnopqrstuvwxyz";
-inline string gen_random(const int len) {
+inline string gen_random(unsigned& seed, const int len) {
   string tmp_s;
-  unsigned seed = time(NULL);
+  // unsigned seed = time(NULL);
   tmp_s.reserve(len);
 
   for (int i = 0; i < len; ++i) {
