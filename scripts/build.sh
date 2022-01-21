@@ -50,7 +50,7 @@ if [[ -z "$MAKE_THREADS" ]]; then MAKE_THREADS=2; fi
 if [[ -z "$TYPE" ]]; then TYPE=Release; fi
 if [[ -z "$TEST" ]]; then TEST=""; fi
 if [[ -z "$COMPILER" ]]; then
-  COMPILER="/usr/bin/g++"
+  COMPILER="/usr/bin/clang++"
   RUN_FORMAT="yes"
 fi
 
@@ -58,7 +58,7 @@ rm -rf build
 mkdir build
 cd build
 
-cmake -std=c++14 "-GUnix Makefiles" -DCMAKE_BUILD_TYPE=$TYPE -DCMAKE_CXX_COMPILER=$COMPILER $TEST ..
+cmake -std=c++11 "-GUnix Makefiles" -DCMAKE_BUILD_TYPE=$TYPE -DCMAKE_CXX_COMPILER=$COMPILER $TEST ..
 
 make -j${MAKE_THREADS}
 
