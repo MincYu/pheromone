@@ -13,7 +13,7 @@ scheduler:
   threads: 
     coord: 1
     io: 1
-  func_dir: /dev/shm
+  func_dir: /dev/shm/
   delay: 0
   shared: 1
   forward_or_reject: 1
@@ -25,8 +25,8 @@ scheduler:
 executor_0:
   ip: 127.0.0.1
   thread_id: 0
-  func_dir: /dev/shm
+  func_dir: /dev/shm/
 executor_1:
   ip: 127.0.0.1
   thread_id: 1
-  func_dir: /dev/shm
+  func_dir: /dev/shm/
