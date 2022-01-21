@@ -61,8 +61,8 @@ inline void update_status(unsigned thread_id, bool busy_flag){
 }
 
 void run(Address ip, unsigned thread_id) {
-  string log_file = "log_executor.txt";
-  string log_name = "log_executor";
+  string log_file = "log_executor_" + std::to_string(thread_id) + ".txt";
+  string log_name = "log_executor_" + std::to_string(thread_id);
   auto log = spdlog::basic_logger_mt(log_name, log_file, true);
   log->flush_on(spdlog::level::info);
 
@@ -193,7 +193,7 @@ void run(Address ip, unsigned thread_id) {
 
     if (duration >= ExecutorTimerThreshold) {
       report_start = std::chrono::system_clock::now();
-      update_status(thread_id, false);
+      update_status(thread_id, false);      
       // log->info("Executer {} report.", thread_id);
     }
    
@@ -214,10 +214,16 @@ int main(int argc, char *argv[]) {
     ::signal(SIGHUP  , exit);
 
     // read the YAML conf
-    YAML::Node conf = YAML::LoadFile("conf/config.yml");
+    YAML::Node conf;
+    if (argc == 2){ 
+      string executor_conf = "executor_" + std::string(argv[1]);
+      conf = YAML::LoadFile("conf/local.yml")[executor_conf];
+    }
+    else conf = YAML::LoadFile("conf/config.yml");
     std::cout << "Read file config.yml" << std::endl;
 
     funcDir = conf["func_dir"].as<string>();
+    std::cout << funcDir << std::endl;
 
     if (YAML::Node wait_tm = conf["wait"]) {
       RecvWaitTm = wait_tm.as<unsigned>();

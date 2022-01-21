@@ -1,0 +1,32 @@
+manager:
+  ip: 127.0.0.1
+  external: 1
+coordinator:
+  coord_threads: 1
+  io_threads: 1
+  manager: 127.0.0.1
+  ip: 
+    private: 127.0.0.1
+    public: 127.0.0.1
+  delay: 0
+scheduler:
+  threads: 
+    coord: 1
+    io: 1
+  func_dir: /dev/shm
+  delay: 0
+  shared: 1
+  forward_or_reject: 1
+  user:
+    ip: 127.0.0.1
+    executor: 2
+    coord:
+      - 127.0.0.1
+executor_0:
+  ip: 127.0.0.1
+  thread_id: 0
+  func_dir: /dev/shm
+executor_1:
+  ip: 127.0.0.1
+  thread_id: 1
+  func_dir: /dev/shm

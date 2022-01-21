@@ -267,13 +267,20 @@ void run(Address public_ip, Address private_ip, unsigned thread_id) {
 }
 
 int main(int argc, char *argv[]) {
-  if (argc != 1) {
+  if (argc > 2) {
     std::cerr << "Usage: " << argv[0] << std::endl;
     return 1;
   }
 
-  YAML::Node conf = YAML::LoadFile("conf/config.yml");
-  
+  YAML::Node conf;
+
+  if (argc == 2) {
+    std::cout << "start local coordinator: " << std::endl;
+    conf = YAML::LoadFile("conf/local.yml")["coordinator"];
+
+  } else {
+    conf = YAML::LoadFile("conf/config.yml");
+  }
   unsigned threads = conf["coord_threads"].as<unsigned>();
   std::cout << "Thread count " << threads << std::endl;
 

@@ -715,7 +715,10 @@ int main(int argc, char *argv[]) {
     ::signal(SIGHUP  , exit);
 
     // read the YAML conf
-    YAML::Node conf = YAML::LoadFile("conf/config.yml");
+    YAML::Node conf;
+    if (argc == 2) 
+      conf = YAML::LoadFile("conf/local.yml")["scheduler"];
+    else conf = YAML::LoadFile("conf/config.yml");
     std::cout << "Read file config.yml" << std::endl;
 
     unsigned coordThreadCount = conf["threads"]["coord"].as<unsigned>();
