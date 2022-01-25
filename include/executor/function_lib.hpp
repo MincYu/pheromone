@@ -20,8 +20,7 @@ typedef int (*CppFunction)(UserLibraryInterface*, int, char**);
 
 class EpheObjectImpl : public EpheObject {
   public:
-    EpheObjectImpl(string bucket, string key, size_t size, bool create) {
-      obj_name_ = bucket + kDelimiter  + key;
+    EpheObjectImpl(string obj_name, size_t size, bool create) {
       size_ = size;
       if (create) {
         // shm_id_ = ipc::shm::acquire(obj_name_.c_str(), size_, ipc::shm::create);
@@ -34,7 +33,11 @@ class EpheObjectImpl : public EpheObject {
       target_func_ = "";
     }
 
-    EpheObjectImpl(string src_function, string tgt_function, size_t size): EpheObjectImpl("b_" +  tgt_function, "k_" + src_function, size, true) {
+    EpheObjectImpl(string bucket, string key, string session_id, size_t size, bool create)
+     :EpheObjectImpl(get_local_object_name(bucket, key, session_id), size, create) {}
+
+    EpheObjectImpl(string src_function, string tgt_function, string session_id, size_t size)
+     :EpheObjectImpl("b_" +  tgt_function, "k_" + src_function, session_id, size, true) {
       target_func_ = tgt_function;
     }
 
@@ -92,13 +95,18 @@ class UserLibrary : public UserLibraryInterface {
       function_ = function;
     }
 
-    void set_resp_address(string &resp_address){
-      resp_address_ = resp_address;
+    void set_session_id(string &session_id){
+      session_id_ = session_id;
     }
 
+    void set_persist_flag(uint8_t &persist_flag){
+      persist_flag_ = persist_flag;
+    }
+    
     void clear_session(){
       function_ = emptyString;
-      resp_address_ = emptyString;
+      session_id_ = emptyString;
+      persist_flag_ = 0;
       size_of_args_.clear();
     }
 
@@ -112,7 +120,7 @@ class UserLibrary : public UserLibraryInterface {
     }
 
     EpheObject* create_object(string bucket, string key, size_t size = 1024 * 1024) {
-      return new EpheObjectImpl(bucket, key, size, true);
+      return new EpheObjectImpl(bucket, key, session_id_, size, true);
     }
 
     EpheObject* create_object(size_t size = 1024 * 1024) {
@@ -122,7 +130,7 @@ class UserLibrary : public UserLibraryInterface {
 
     EpheObject* create_object(string target_function, bool many_to_one_trigger = true, size_t size = 1024 * 1024) {
       if (many_to_one_trigger) {
-        return new EpheObjectImpl(function_, target_function, size);
+        return new EpheObjectImpl(function_, target_function, session_id_, size);
       }
       else {
         return create_object("b_" + target_function, gen_unique_key(), size);
@@ -136,7 +144,7 @@ class UserLibrary : public UserLibraryInterface {
 
       bool wait_res = false;
       if (output) {
-        if (resp_address_.empty()) {
+        if (persist_flag_ == 1) {
           // write to remote data store
           req.push_back(3);
           wait_res = true;
@@ -152,12 +160,9 @@ class UserLibrary : public UserLibraryInterface {
       }
       
       req.push_back(req_id);
-      req.push_back(resp_address_.empty() ? 1 : 2);
       bool data_packing = data->get_size() <= msgDataPackingThreshold;
       req.push_back(data_packing ? 1 : 2);
-      if (!resp_address_.empty()){
-        req += resp_address_ + "|";
-      }
+      req += session_id_ + "|";
       req += function_ + "|" + static_cast<EpheObjectImpl*>(data)->target_func_ + "|"
                         + static_cast<EpheObjectImpl*>(data)->obj_name_ + "|";
 
@@ -201,10 +206,10 @@ class UserLibrary : public UserLibraryInterface {
     }
 
     EpheObject* get_object(string bucket, string key, bool from_ephe_store=true) {
+      string obj_name = get_local_object_name(bucket, key, session_id_);
       if (!from_ephe_store) {
-        bucket = kvsKeyPrefix;
+        obj_name = kvsKeyPrefix + kDelimiter + key;
       }
-      string obj_name = bucket + kDelimiter + key;
       string req;
       auto req_id = get_request_id();
       req.push_back(chan_id_);
@@ -240,7 +245,7 @@ class UserLibrary : public UserLibraryInterface {
       }
 
       auto size_len = stoi(string(recv_str + 3));
-      return new EpheObjectImpl(bucket, key, size_len, false);
+      return new EpheObjectImpl(obj_name, size_len, false);
     }
 
     string gen_unique_key(){
@@ -265,7 +270,8 @@ class UserLibrary : public UserLibraryInterface {
     uint8_t rid_;
     unsigned object_id_;
     string function_;
-    string resp_address_;
+    string session_id_;
+    uint8_t persist_flag_;
     vector<size_t> size_of_args_;
 };
 

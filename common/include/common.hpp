@@ -27,49 +27,47 @@ const string bucketNameDirectInvoc = "direct_invoc";
 const string emptyString = string();
 const string kvsKeyPrefix = "KVS";
 
+inline string get_key_session_name(string key, string session){
+  return key + session;
+}
+
+inline string get_local_object_name(string bucket, string key, string session) {
+  return bucket + kDelimiter + get_key_session_name(key, session);
+}
+
 struct BucketKey {
-  ValueType vt_;
   Bucket bucket_;
   Key key_;
   Session session_;
 
   BucketKey(){}
 
-  BucketKey(Bucket &bucket, Key &key, Session &session): bucket_(bucket), key_(key), session_(session){
-    if (session.empty()){
-      vt_ = ValueType::NORMAL;
-    }
-    else{
-      vt_ = ValueType::SESSION;
+  BucketKey(Bucket &bucket, Key &key, Session &session): bucket_(bucket), key_(key), session_(session){}
+
+  BucketKey(Bucket &bucket, string &session_key): bucket_(bucket) {
+    session_ = "";
+    auto key_size = session_key.size();
+    if ( key_size > 16) {
+      session_ = session_key.substr(key_size - 16);
+      key_ = session_key.substr(0, key_size - 16);
     }
   }
 
-  string merge_to_string() const {
-    return std::to_string(vt_)
-            + kDelimiter + bucket_
-            + kDelimiter + key_
-            + kDelimiter + session_;
-  }
 
   /**
    * return the key name used in shared memory
    */ 
   string shm_key_name() const {
-    return bucket_ + "|" + key_ + session_;
+    return get_local_object_name(bucket_, key_, session_);
   }
 
 };
 
 inline BucketKey get_bucket_key_from_string(string &key_name) {
-  auto splitter_index = key_name.find("|");
-  string key = key_name.substr(splitter_index + 1)
-  string session = "";
-  auto key_size = key.size();
-  if ( key_size > 16) {
-    session = key.substr(key_size - 16);
-    key = key.substr(0, key_size - 16);
-  }
-  BucketKey bucket_key(key_name.substr(0, splitter_index), key, session);
+  auto splitter_index = key_name.find(kDelimiter);
+  string bucket = key_name.substr(0, splitter_index);
+  string session_key = key_name.substr(splitter_index + 1);
+  BucketKey bucket_key(bucket, session_key);
   return bucket_key;
 }
 
@@ -77,7 +75,6 @@ inline BucketKey get_bucket_key_from_string(string &key_name) {
 inline BucketKeyTuple* get_tuple_from_bucket_key(const BucketKey &bucket_key, BucketKeyTuple *tp) {
   tp->set_bucket(bucket_key.bucket_);
   tp->set_key(bucket_key.key_);
-  tp->set_value_type(bucket_key.vt_);
   tp->set_session(bucket_key.session_);
   
   return tp;
@@ -85,7 +82,6 @@ inline BucketKeyTuple* get_tuple_from_bucket_key(const BucketKey &bucket_key, Bu
 
 inline BucketKey get_bucket_key_from_tuple(BucketKeyTuple &tuple) {
   BucketKey bucket_key;
-  bucket_key.vt_ = tuple.value_type(); // type hint from users
   bucket_key.bucket_ = tuple.bucket();
   bucket_key.key_ = tuple.key();
   bucket_key.session_ = tuple.session();
@@ -94,7 +90,6 @@ inline BucketKey get_bucket_key_from_tuple(BucketKeyTuple &tuple) {
 }
 
 inline BucketKeyAddress* get_addr_from_bucket_key(const BucketKey &bucket_key, BucketKeyAddress *addr) {
-  addr->set_value_type(bucket_key.vt_);
   addr->set_bucket(bucket_key.bucket_);
   addr->set_key(bucket_key.key_);
   addr->set_session(bucket_key.session_);
@@ -104,7 +99,6 @@ inline BucketKeyAddress* get_addr_from_bucket_key(const BucketKey &bucket_key, B
 
 inline BucketKey get_bucket_key_from_addr(const BucketKeyAddress &addr) {
   BucketKey bucket_key;
-  bucket_key.vt_ = addr.value_type(); // type hint from users
   bucket_key.bucket_ = addr.bucket();
   bucket_key.key_ = addr.key();
   bucket_key.session_ = addr.session();

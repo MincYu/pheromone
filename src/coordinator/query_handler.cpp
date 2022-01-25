@@ -1,9 +1,7 @@
 #include "coord_handlers.hpp"
 
 void query_handler(logger log, string &serialized, SocketCache &pushers,
-                    map<Bucket, map<Key, set<Address>>> &normal_key_address_map,
-                    map<Bucket, map<Session, map<Key, set<Address>>>> &session_key_address_map,
-                    map<Bucket, ValueType> &bucket_type_map) {
+                    map<Bucket, map<Key, set<Address>>> &bucket_key_address_map) {
   KeyQueryRequest query_request;
   query_request.ParseFromString(serialized);
 
@@ -16,8 +14,8 @@ void query_handler(logger log, string &serialized, SocketCache &pushers,
   for (const BucketKeyAddress &address : query_request.addresses()) {
     BucketKey bucket_key = get_bucket_key_from_addr(address);
 
-    if (bucket_type_map.find(bucket_key.bucket_) != bucket_type_map.end()) {
-      GetAddressResult get_result = get_address(bucket_key, normal_key_address_map, session_key_address_map, log);
+    if (bucket_key_address_map.find(bucket_key.bucket_) != bucket_key_address_map.end()) {
+      GetAddressResult get_result = get_address(bucket_key, bucket_key_address_map, log);
       if (get_result.error_ == KVSError::SUCCESS) {
         query_results.push_back(std::make_pair(bucket_key, get_result));
       }

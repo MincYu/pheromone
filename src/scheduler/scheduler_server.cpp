@@ -1,15 +1,4 @@
-#include <signal.h>
-#include <iostream>
-#include <string>
-#include <cstring>
-#include <thread>
-#include <chrono>
-#include <cstddef>
-#include <atomic>
-#include "libipc/ipc.h"
-#include "libipc/shm.h"
-#include "capo/random.hpp"
-
+#include "object_handlers.hpp"
 #include "comm_helper.hpp"
 #include "anna_client/kvs_client.hpp"
 #include "yaml-cpp/yaml.h"
@@ -25,7 +14,7 @@ struct InflightIORequest {
 };
 
 struct DelayFunctionCall {
-  string resp_address_;
+  string session_id_;
   string app_name_;
   string func_name_;
   vector<string> func_args_;
@@ -49,9 +38,9 @@ bool rejectExtraReq;
 
 queue<DelayFunctionCall> delay_call_queue;
 
-// map<string, char *> key_ptr_map;
 map<string, unsigned> key_len_map;
 map<string, string> key_val_map;
+map<string, string> session_client_addr_map;
 
 inline int get_avail_executor_num(map<uint8_t, uint8_t> &executor_status_map){
   int executors = 0;
@@ -83,7 +72,7 @@ inline void release_shm_object() {
   // TODO clear the shared memory
 }
 
-void forward_call_via_helper(CommHelperInterface *helper, string &resp_address, string &app_name, vector<string> &func_name_vec, 
+void forward_call_via_helper(CommHelperInterface *helper, string &session_id, string &app_name, vector<string> &func_name_vec, 
                             vector<vector<string>> &func_args_vec, int arg_flag){
   // send request to global coordinator
   if (arg_flag > 0){
@@ -98,7 +87,7 @@ void forward_call_via_helper(CommHelperInterface *helper, string &resp_address, 
       for (auto &func_args : func_args_vec){
         vector<string> real_data_args;
         for (int i = 0; i < func_args.size(); i+=3){
-          string key_name = func_args[i] + "|" + func_args[i + 1];
+          string key_name = func_args[i] + kDelimiter + func_args[i + 1];
           auto size_len = key_len_map[key_name];
           auto shm_id = ipc::shm::acquire(key_name.c_str(), size_len, ipc::shm::open);
           auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
@@ -114,19 +103,19 @@ void forward_call_via_helper(CommHelperInterface *helper, string &resp_address, 
         data_args_vec.push_back(real_data_args);
       }
 
-      helper->forward_func_call(resp_address, app_name, func_name_vec, data_args_vec, 0);
+      helper->forward_func_call(session_client_addr_map[session_id], app_name, func_name_vec, data_args_vec, 0, session_id);
     }
     else{
-      helper->forward_func_call(resp_address, app_name, func_name_vec, func_args_vec, arg_flag);
+      helper->forward_func_call(session_client_addr_map[session_id], app_name, func_name_vec, func_args_vec, arg_flag, session_id);
     }
   }
   else{
-    helper->forward_func_call(resp_address, app_name, func_name_vec, func_args_vec, arg_flag);
+    helper->forward_func_call(session_client_addr_map[session_id], app_name, func_name_vec, func_args_vec, arg_flag, session_id);
   }
 }
 
 void schedule_func_call(logger log, CommHelperInterface *helper, map<uint8_t, uint8_t> &executor_status_map, map<string, set<uint8_t>> &function_executor_map,
-                        string &resp_address, string &app_name, string &func_name, vector<string> &func_args, int arg_flag){
+                        string &session_id, string &app_name, string &func_name, vector<string> &func_args, int arg_flag){
   vector<uint8_t> avail_warm_executors;
   vector<uint8_t> avail_cold_executors;
   for (auto &executor_status : executor_status_map) {
@@ -156,13 +145,10 @@ void schedule_func_call(logger log, CommHelperInterface *helper, map<uint8_t, ui
     resp.push_back(1);
     // arg_flag. 0:actual value; 1:key value; 2:need both key name and key value
     resp.push_back(static_cast<uint8_t>(arg_flag + 1));
-    if (resp_address.empty()) {
-      resp.push_back(1);
-    }
-    else{
-      resp.push_back(2);
-      resp += resp_address + "|";
-    }
+    // persist_output_flag. 1: persist; 2: not
+    resp.push_back(static_cast<uint8_t>(session_client_addr_map[session_id].empty() ? 1 : 2));
+    resp += session_id + "|";
+
     string func_args_string(func_name);
     for (int i = 0; i < func_args.size(); i++){
       func_args_string = func_args_string + "|" + func_args[i];
@@ -179,7 +165,7 @@ void schedule_func_call(logger log, CommHelperInterface *helper, map<uint8_t, ui
   else{
     // log->info("No local executor available in scheduling.");
     if (schedDelayTime > 0){
-      delay_call_queue.push(DelayFunctionCall{resp_address, app_name, func_name, func_args, arg_flag, std::chrono::system_clock::now()});
+      delay_call_queue.push(DelayFunctionCall{session_id, app_name, func_name, func_args, arg_flag, std::chrono::system_clock::now()});
     }
     else {
       if (!rejectExtraReq) {
@@ -203,7 +189,7 @@ void schedule_func_call(logger log, CommHelperInterface *helper, map<uint8_t, ui
         else{
           func_args_vec.push_back(func_args);
         }
-        forward_call_via_helper(helper, resp_address, app_name, func_name_vec, func_args_vec, arg_flag);
+        forward_call_via_helper(helper, session_id, app_name, func_name_vec, func_args_vec, arg_flag);
       }
     }
   }
@@ -212,67 +198,24 @@ void schedule_func_call(logger log, CommHelperInterface *helper, map<uint8_t, ui
 /**
  * Return triggers employed
  */ 
-vector<string> check_trigger(logger log, BucketKey &bucket_key, string &resp_address, 
+vector<string> check_trigger(logger log, BucketKey &bucket_key, string &session_id, 
                             CommHelperInterface *helper, map<Bucket, vector<TriggerPointer>> &bucket_triggers_map, map<string, set<uint8_t>> &function_executor_map,
                             map<uint8_t, uint8_t> &executor_status_map, map<string, string> &bucket_app_map) {
   vector<string> active_triggers;
+  vector<TriggerFunctionMetadata> active_func_metadata;
+  check_object_arrival(log, bucket_key, bucket_triggers_map, active_triggers, active_func_metadata);
 
-  for (auto &trigger : bucket_triggers_map[bucket_key.bucket_]) {
-    auto actions = trigger->action_for_new_object(bucket_key);
-    int arg_flag = trigger->get_trigger_option() + 1;
-    if (actions.size() > 0) {
-      // log->info("Trigger function {} after BucketKey {} {} prepared", actions[0].function_, bucket_key.bucket_, bucket_key.key_);
-      active_triggers.push_back(trigger->get_trigger_name());
-      
-      for (auto &action : actions){
-        vector<string> func_args;
-        bool cached_real_data = true;
-        for (auto &session_key: action.session_keys_){
-          string key_name = bucket_key.bucket_ + "|" + session_key.second;
-          if (key_val_map.find(key_name) == key_val_map.end()) {
-            cached_real_data = false;
-            break;
-          }
-        }
-        if (cached_real_data) {
-          arg_flag = 0;
-          for (auto &session_key: action.session_keys_){
-            string key_name = bucket_key.bucket_ + "|" + session_key.second;
-            func_args.push_back(key_val_map[key_name]);
-          }
-        }
-        else {
-          for (auto &session_key: action.session_keys_){
-            string key_name = bucket_key.bucket_ + "|" + session_key.second;
-            func_args.push_back(bucket_key.bucket_);
-            func_args.push_back(session_key.second);
-            func_args.push_back(std::to_string(key_len_map[key_name]));
-          }
-        }
-        schedule_func_call(log, helper, executor_status_map, function_executor_map, resp_address, bucket_app_map[bucket_key.bucket_], action.function_, func_args, arg_flag);
-      }
-    }
+  // if (active_func_metadata.size() > 0){
+  //   log->info("Trigger {} function(s) when BucketKey {} {} arrives", active_func_metadata.size(), bucket_key.bucket_, bucket_key.key_);
+  // }
+  for (auto &func_metadata : active_func_metadata) {
+    schedule_func_call(log, helper, executor_status_map, function_executor_map, session_id, 
+                        bucket_app_map[bucket_key.bucket_], func_metadata.func_name_, func_metadata.func_args_, func_metadata.arg_flag_);
   }
+  
   return active_triggers;
 }
 
-void copy_to_shm_obj(string &key_name, const char* data_src, unsigned data_size){
-    auto shm_id = ipc::shm::acquire(key_name.c_str(), data_size);
-    auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
-    memcpy(shm_ptr, data_src, data_size);
-}
-
-pair<char*, unsigned> get_shm_obj(string &key_name){
-  if (key_len_map.find(key_name) != key_len_map.end()){
-    auto size_of_obj = key_len_map[key_name];
-    auto shm_id = ipc::shm::acquire(key_name.c_str(), size_of_obj, ipc::shm::open);
-    auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
-    return std::make_pair(shm_ptr, size_of_obj);
-  }
-  else {
-    return std::make_pair(nullptr, 0);
-  }
-} 
 
 void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned executor) {
   string log_file = "log_scheduler_" + std::to_string(thread_id) + ".txt";
@@ -331,8 +274,8 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
       auto recv_stamp = std::chrono::system_clock::now();
 
       // executor address (1 byte) | requst type (1 byte) | request id (1 byte) | metadata len (1 byte)| metadata | optional value
-      auto resp_address = str[0];
-      uint8_t executor_id = static_cast<uint8_t>(resp_address - 1);
+      auto executor_address = str[0];
+      uint8_t executor_id = static_cast<uint8_t>(executor_address - 1);
 
       // get request
       if (str[1] == 1){
@@ -381,33 +324,28 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
       // send object handler
       if (str[1] >= 2 && str[1] <= 4){
         auto req_id = static_cast<uint8_t>(str[2]);
-        auto empty_resp_address = static_cast<uint8_t>(str[3]);
-        auto is_data_packing = static_cast<uint8_t>(str[4]);
+        auto is_data_packing = static_cast<uint8_t>(str[3]);
 
-        string params(str + 5);
+        string params(str + 4);
         vector<string> infos;
         split(params, '|', infos);
 
-        if (infos.size() - empty_resp_address < 4) {
+        if (infos.size() < 6) {
           log->warn("Send object handler has no enough argument {} params {}", infos.size(), params);
         }
         else{
-          string resp_address = empty_resp_address == 1 ? emptyString : infos[0];
-          auto src_function = infos[empty_resp_address - 1];
-          auto tgt_function = infos[empty_resp_address];
-
-          auto bucket = infos[empty_resp_address + 1];
-          auto key = infos[empty_resp_address + 2];
-          string obj_name = bucket + kDelimiter + key;
+          // unpacking infos
+          string& session_id = infos[0], src_function = infos[1], tgt_function = infos[2], bucket = infos[3], session_key = infos[4];
+          string obj_name = bucket + kDelimiter + session_key;
 
           // ephemeral data
           if (str[1] == 2) {
             if (is_data_packing == 1) {
-              key_val_map[obj_name] = infos[empty_resp_address + 3];
+              key_val_map[obj_name] = infos[5];
               key_len_map[obj_name] = key_val_map[obj_name].size();
             }
             else if (is_data_packing == 2){
-              int size_int = stoi(infos[empty_resp_address + 3]);
+              int size_int = stoi(infos[5]);
               key_len_map[obj_name] = size_int;
             }
             
@@ -422,7 +360,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
                 arg_flag = 0;
               }
               else if (is_data_packing == 2){
-                func_args = {bucket, key, infos[empty_resp_address + 3]};
+                func_args = {obj_name, infos[5]};
               }
 
               if (tgt_function.empty()){
@@ -434,19 +372,19 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
                 if (target_funcs.size() > avail_executors){
                   vector<string> local_funcs(target_funcs.begin(), target_funcs.begin() + avail_executors);
                   vector<string> remote_funcs(target_funcs.begin() + avail_executors, target_funcs.end());
-                  for (auto &func : local_funcs) schedule_func_call(log, helper, executor_status_map, function_executor_map, resp_address, app_name, func, func_args, arg_flag);
+                  for (auto &func : local_funcs) schedule_func_call(log, helper, executor_status_map, function_executor_map, session_id, app_name, func, func_args, arg_flag);
                   if (!rejectExtraReq){
                     vector<vector<string>> func_args_vec;
                     for (int i = 0; i < remote_funcs.size(); i++) func_args_vec.push_back(func_args);
-                    forward_call_via_helper(helper, resp_address, app_name, remote_funcs, func_args_vec, arg_flag);
+                    forward_call_via_helper(helper, session_id, app_name, remote_funcs, func_args_vec, arg_flag);
                   }
                 }
                 else{
-                  for (auto &func : target_funcs) schedule_func_call(log, helper, executor_status_map, function_executor_map, resp_address, app_name, func, func_args, arg_flag);
+                  for (auto &func : target_funcs) schedule_func_call(log, helper, executor_status_map, function_executor_map, session_id, app_name, func, func_args, arg_flag);
                 }
               }
               else if (app_info_map[app_name].direct_deps_[src_function].find(tgt_function) != app_info_map[app_name].direct_deps_[src_function].end()) {
-                schedule_func_call(log, helper, executor_status_map, function_executor_map, resp_address, app_name, tgt_function, func_args, arg_flag);
+                schedule_func_call(log, helper, executor_status_map, function_executor_map, session_id, app_name, tgt_function, func_args, arg_flag);
               }
               else {
                 log->warn("Direct Invocation without pre-defined dependency {} -> {}", src_function, tgt_function);
@@ -454,14 +392,13 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
             }
             // try trigger check
             else if (bucket != bucketNameDirectInvoc){
-              string session = "";
-              BucketKey bucket_key(bucket, key, session);
-              auto active_triggers = check_trigger(log, bucket_key, resp_address, helper, bucket_triggers_map, function_executor_map, executor_status_map, bucket_app_map);
+              BucketKey bucket_key = BucketKey(bucket, session_key);
+              auto active_triggers = check_trigger(log, bucket_key, session_id, helper, bucket_triggers_map, function_executor_map, executor_status_map, bucket_app_map);
               if (is_data_packing == 1) {
-                helper->notify_put(bucket_key, active_triggers, resp_address, key_val_map[obj_name]);
+                helper->notify_put(bucket_key, active_triggers, session_client_addr_map[session_id], key_val_map[obj_name]);
               }
               else if (is_data_packing == 2){
-                helper->notify_put(bucket_key, active_triggers, resp_address);
+                helper->notify_put(bucket_key, active_triggers, session_client_addr_map[session_id]);
               }
               log->info("Notified data {}", obj_name);
               call_id += active_triggers.size();
@@ -471,37 +408,35 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
           else if (str[1] == 3) {
             // currently we use anna
             if (is_data_packing == 1) {
-              string output_data = infos[empty_resp_address + 3];
+              string output_data = infos[5];
               char *val_ptr = new char[output_data.size()];
               strcpy(val_ptr, output_data.c_str());
-              helper->put_kvs_async(key, val_ptr, output_data.size());
+              helper->put_kvs_async(session_key, val_ptr, output_data.size());
             }
             else if (is_data_packing == 2){
-              auto size = infos[empty_resp_address + 3];
-              int size_int = stoi(size);
+              int size_int = stoi(infos[5]);
               auto shm_id = ipc::shm::acquire(obj_name.c_str(), size_int, ipc::shm::open);
               auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
-              helper->put_kvs_async(key, shm_ptr, size_int);
+              helper->put_kvs_async(session_key, shm_ptr, size_int);
             }
 
             InflightIORequest put_req = {executor_id, req_id, recv_stamp};
-            key_ksv_put_map[key].push_back(put_req);
+            key_ksv_put_map[session_key].push_back(put_req);
           }
           // response to client
           else if (str[1] == 4) {
             string output_data;
             if (is_data_packing == 1) {
-              output_data = infos[empty_resp_address + 3];
+              output_data = infos[5];
             }
             else if (is_data_packing == 2){
-              auto size = infos[empty_resp_address + 3];
-              int size_int = stoi(size);
+              int size_int = stoi(infos[5]);
               auto shm_id = ipc::shm::acquire(obj_name.c_str(), size_int, ipc::shm::open);
               auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
               output_data = string(shm_ptr, size_int);
             }
 
-            helper->client_response(resp_address, func_app_map[src_function], output_data);
+            helper->client_response(session_client_addr_map[session_id], func_app_map[src_function], output_data);
             // TODO remove output data
           }
         }
@@ -529,6 +464,8 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
     auto comm_resps = helper->try_recv_msg(bucket_triggers_map, app_info_map, func_app_map, bucket_app_map);
     for (auto &comm_resp : comm_resps) {
       if (comm_resp.msg_type_ == RecvMsgType::Call) {
+        session_client_addr_map[comm_resp.session_id_] = comm_resp.resp_address_;
+
         for (int i = 0; i < comm_resp.func_name_.size(); i++){
           auto func_name = comm_resp.func_name_[i];
           auto func_args = comm_resp.func_args_[i];
@@ -536,7 +473,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
           if (is_func_arg_key > 0) {
             InflightFuncArgs inflight_args;
             inflight_args.func_name_ = func_name;
-            inflight_args.resp_address_ = comm_resp.resp_address_;
+            inflight_args.session_id_ = comm_resp.session_id_;
             inflight_args.arg_flag_ = is_func_arg_key;
             for (auto &arg : func_args){
               inflight_args.key_args_.push_back(arg);
@@ -560,14 +497,14 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
                 func_full_args.push_back(key);
                 func_full_args.push_back(std::to_string(key_len_map[key]));
               }
-              schedule_func_call(log, helper, executor_status_map, function_executor_map, comm_resp.resp_address_, comm_resp.app_name_, inflight_args.func_name_, func_full_args, is_func_arg_key);
+              schedule_func_call(log, helper, executor_status_map, function_executor_map, comm_resp.session_id_, comm_resp.app_name_, inflight_args.func_name_, func_full_args, is_func_arg_key);
             }
             else{
               call_id_inflight_args_map[call_id] = inflight_args;
             }
           }
           else{
-            schedule_func_call(log, helper, executor_status_map, function_executor_map, comm_resp.resp_address_, comm_resp.app_name_, func_name, func_args, 0);
+            schedule_func_call(log, helper, executor_status_map, function_executor_map, comm_resp.session_id_, comm_resp.app_name_, func_name, func_args, 0);
           }
           call_id++;
         }
@@ -604,7 +541,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
                 func_args.push_back(std::to_string(key_len_map[key]));
               }
               schedule_func_call(log, helper, executor_status_map, function_executor_map,
-                                call_id_inflight_args_map[cid].resp_address_,
+                                call_id_inflight_args_map[cid].session_id_,
                                 func_app_map[call_id_inflight_args_map[cid].func_name_],
                                 call_id_inflight_args_map[cid].func_name_, 
                                 func_args, call_id_inflight_args_map[cid].arg_flag_);
@@ -661,7 +598,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
       int cur_avail_executors = get_avail_executor_num(executor_status_map);
       while (cur_avail_executors > 0 && !delay_call_queue.empty()) {
         auto delay_call = delay_call_queue.front();
-        schedule_func_call(log, helper, executor_status_map, function_executor_map, delay_call.resp_address_, 
+        schedule_func_call(log, helper, executor_status_map, function_executor_map, delay_call.session_id_, 
                             delay_call.app_name_, delay_call.func_name_, delay_call.func_args_, delay_call.arg_flag_);
         cur_avail_executors--;
         delay_call_queue.pop();
@@ -677,7 +614,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
             func_name_vec.push_back(delay_call.func_name_);
             vector<vector<string>> func_args_vec;
             func_args_vec.push_back(delay_call.func_args_);
-            forward_call_via_helper(helper, delay_call.resp_address_, delay_call.app_name_, 
+            forward_call_via_helper(helper, delay_call.session_id_, delay_call.app_name_, 
                                 func_name_vec, func_args_vec, delay_call.arg_flag_);
           }
           delay_call_queue.pop();
@@ -780,5 +717,3 @@ int main(int argc, char *argv[]) {
     std::cout << "Done Configuration" << std::endl;
     run(&helper, ip, 0, executor_num);
 }
-
-

@@ -47,20 +47,16 @@ inline string get_func_exec_address(string ip, unsigned io_thread){
 void update_address(
     const BucketKey &bucket_key,
     const Address &addr, 
-    map<Bucket, map<Key, set<Address>>> &normal_key_address_map,
-    map<Bucket, map<Session, map<Key, set<Address>>>> &session_key_address_map,
+    map<Bucket, map<Key, set<Address>>> &bucket_key_address_map,
     logger log);
 
 GetAddressResult get_address(
     const BucketKey &bucket_key,
-    map<Bucket, map<Key, set<Address>>> &normal_key_address_map,
-    map<Bucket, map<Session, map<Key, set<Address>>>> &session_key_address_map,
+    map<Bucket, map<Key, set<Address>>> &bucket_key_address_map,
     logger log);
 
 void notify_handler(logger log, string &serialized, SocketCache &pushers,
-                    map<Bucket, map<Key, set<Address>>> &normal_key_address_map,
-                    map<Bucket, map<Session, map<Key, set<Address>>>> &session_key_address_map,
-                    map<Bucket, ValueType> &bucket_type_map,
+                    map<Bucket, map<Key, set<Address>>> &bucket_key_address_map,
                     map<Bucket, vector<TriggerPointer>> &bucket_triggers_map,
                     map<Bucket, string> &bucket_app_map,
                     map<string, string> &bucket_key_val_map,
@@ -68,25 +64,22 @@ void notify_handler(logger log, string &serialized, SocketCache &pushers,
                     map<Address, NodeStatus> &node_status_map);
 
 void query_handler(logger log, string &serialized, SocketCache &pushers, 
-                    map<Bucket, map<Key, set<Address>>> &normal_key_address_map,
-                    map<Bucket, map<Session, map<Key, set<Address>>>> &session_key_address_map,
-                    map<Bucket, ValueType> &bucket_type_map);
+                    map<Bucket, map<Key, set<Address>>> &bucket_key_address_map);
 
-void bucket_op_handler(logger log, string &serialized, SocketCache &pushers, 
-                        map<Bucket, ValueType> &bucket_type_map,
+void bucket_op_handler(logger log, string &serialized, SocketCache &pushers,
                         map<Bucket, vector<TriggerPointer>> &bucket_triggers_map,
-                        map<string, set<string>> &app_buckets_map);
+                        map<string, set<string>> &app_buckets_map,
+                        map<Bucket, string> &bucket_app_map);
 
 void trigger_op_handler(logger log, string &serialized, string &private_ip, unsigned &thread_id, SocketCache &pushers,
-                        map<Bucket, ValueType> &bucket_type_map,
                         map<Bucket, vector<TriggerPointer>> &bucket_triggers_map,
+                        map<Bucket, string> &bucket_app_map,
                         map<Address, NodeStatus> &node_status_map);
 
 void func_call_handler(logger log, string &serialized, SocketCache &pushers,
                         map<Address, NodeStatus> &node_status_map);
 
-void app_register_handler(logger log, string &serialized, string &private_ip, unsigned &thread_id, SocketCache &pushers, 
-                        map<Bucket, ValueType> &bucket_type_map, 
+void app_register_handler(logger log, string &serialized, string &private_ip, unsigned &thread_id, SocketCache &pushers,
                         map<Bucket, vector<TriggerPointer>> &bucket_triggers_map,
                         map<string, set<string>> &app_buckets_map,
                         map<Bucket, string> &bucket_app_map,

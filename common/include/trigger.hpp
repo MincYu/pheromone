@@ -167,34 +167,6 @@ class BySetTrigger : public Trigger {
           actions.push_back(action);
           session_prepared_keys_map_.erase(bucket_key.session_);
         }
-        
-        // if (bucket_key.vt_ == ValueType::NORMAL) {
-        //   prepared_keys_.insert(bucket_key.key_);
-        //   // the keys are ready
-        //   if (prepared_keys_.size() == key_set_.size()) {
-        //     action.function_ = target_function_;
-        //     for (auto &key: key_set_){
-        //       action.session_keys_.push_back(std::make_pair("", key));
-        //     }
-        //     prepared_keys_.clear();
-        //   }
-        //   else {
-        //     action.function_ = "";
-        //   }
-        // }
-        // else if (bucket_key.vt_ == ValueType::SESSION) {
-        //   session_prepared_keys_map_[bucket_key.session_].insert(bucket_key.key_);
-        //   if (session_prepared_keys_map_[bucket_key.session_].size() == key_set_.size()) {
-        //     action.function_ = target_function_;
-        //     for (auto &key: key_set_){
-        //       action.session_keys_.push_back(std::make_pair(bucket_key.session_, key));
-        //     }
-        //     session_prepared_keys_map_.erase(bucket_key.session_);
-        //   }
-        //   else {
-        //     action.function_ = "";
-        //   }
-        // }
       }
       return actions;
     }
@@ -212,16 +184,11 @@ class BySetTrigger : public Trigger {
     }
 
     void clear() {
-      prepared_keys_.clear();
       session_prepared_keys_map_.clear();
     };
 
   private:
     set<Key> key_set_;
-
-    // The two are for keeping keys that have been prepared.
-    // Note that only one of them would be used, which is based on ValueType of bucket
-    set<Key> prepared_keys_;
     map<Session, set<Key>> session_prepared_keys_map_;
 };
 
@@ -248,7 +215,7 @@ class DynamicGroupTrigger : public Trigger {
             action.function_ = target_function_;
             for (auto &key : group_keys.second){
               // TODO session support
-              action.session_keys_.push_back(std::make_pair("", key));
+              action.session_keys_.push_back(std::make_pair(bucket_key.session_, key));
             }
             actions.push_back(action);
           }
@@ -293,7 +260,7 @@ class RedundantTrigger : public Trigger {
       vector<TriggerAction> actions;
       count_++;
       if (count_ <= k_) {
-        buffer_.push_back(std::make_pair("", bucket_key.key_));
+        buffer_.push_back(std::make_pair(bucket_key.session_, bucket_key.key_));
         if (count_ == k_) {
           actions.push_back({target_function_, buffer_});
           buffer_.clear();
@@ -339,7 +306,7 @@ class ByTimeTrigger : public Trigger {
       }
 
     vector<TriggerAction> action_for_new_object(const BucketKey &bucket_key) {
-      buffer_.push_back(std::make_pair("", bucket_key.key_));
+      buffer_.push_back(std::make_pair(bucket_key.session_, bucket_key.key_));
 
       // In most cases, the streaming data come with high frequency, thus we just check the timestamp upon data arrival
       // Consider periodically trigger in future 

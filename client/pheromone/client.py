@@ -65,13 +65,12 @@ class PheromoneClient():
             lattice = LWWPairLattice(generate_timestamp(0), bytes(value, 'utf-8'))
         return self.kvs_client.put(key, lattice)
 
-    def create_bucket(self, app_name, bucket_name, value_type=NORMAL):
+    def create_bucket(self, app_name, bucket_name):
         coord_thread = self._try_get_app_coord(app_name)
         req = BucketOperationRequest()
         req = self._prepare_request(req, CREATE_BUCKET, self.ort.bucket_req_connect_address())
         
         req.bucket_name = bucket_name
-        req.bucket_type = value_type
         req.app_name = app_name
 
         self.pusher_cache.send(coord_thread.bucket_op_connect_address(), req)

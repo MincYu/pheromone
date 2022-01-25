@@ -165,12 +165,10 @@ message BucketOperationRequest {
   string app_name = 2;
 
   string bucket_name = 3;
-  
-  ValueType bucket_type = 4;
 
-  string request_id = 5;
+  string request_id = 4;
 
-  string response_address = 6;
+  string response_address = 5;
 }
 
 message BucketOperationResponse {

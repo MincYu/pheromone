@@ -7,6 +7,7 @@ INCLUDE_DIRECTORIES(../../include/scheduler)
 
 SET(SCHEDULER_SOURCE 
     scheduler_server.cpp
+    object_handlers.cpp
 )
 
 ADD_EXECUTABLE(scheduler ${SCHEDULER_SOURCE})

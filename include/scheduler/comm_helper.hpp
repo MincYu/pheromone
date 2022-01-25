@@ -19,10 +19,11 @@ struct RecvMsg {
   RecvMsgType msg_type_;
   string app_name_;
   string resp_address_;
-  string session_id_;
   vector<string> func_name_;
   vector<vector<string>> func_args_;
   vector<int> is_func_arg_keys_;
+  // pair<string, bool> session_id_sync_data_;
+  string session_id_;
   bool sync_data_status_;
   string data_key_;
   unsigned data_size_;
@@ -37,7 +38,7 @@ struct AppInfo {
 
 struct InflightFuncArgs {
   string func_name_;
-  string resp_address_;
+  string session_id_;
   vector<string> key_args_;
   set<string> inflight_args_;
   int arg_flag_;
@@ -96,7 +97,7 @@ class CommHelperInterface {
   virtual void update_status(int avail_executors, set<string> &function_cache) = 0;
   virtual vector<RecvMsg> try_recv_msg(map<Bucket, vector<TriggerPointer>> &bucket_triggers_map, map<string, AppInfo> &app_info_map, 
                               map<string, string> &func_app_map, map<string, string> &bucket_app_map) = 0;
-  virtual void forward_func_call(string &resp_address, string &app_name, vector<string> &func_name_vec, vector<vector<string>> &func_args_vec, int arg_flag) = 0;
+  virtual void forward_func_call(string &resp_address, string &app_name, vector<string> &func_name_vec, vector<vector<string>> &func_args_vec, int arg_flag, string &session_id) = 0;
   virtual void send_data_req(string &key) = 0;
   // virtual void send_data_resp(string &key, char* data_ptr, unsigned data_size) = 0;
 
@@ -387,11 +388,12 @@ class CommHelper : public CommHelperInterface {
     }
   }
 
-  void forward_func_call(string &resp_address, string &app_name, vector<string> &func_name_vec, vector<vector<string>> &func_args_vec, int arg_flag) {
+  void forward_func_call(string &resp_address, string &app_name, vector<string> &func_name_vec, vector<vector<string>> &func_args_vec, int arg_flag, string &session_id) {
     FunctionCall forwardCall;
     forwardCall.set_app_name(app_name);
     forwardCall.set_resp_address(resp_address);
     forwardCall.set_source(ip_);
+    forwardCall.set_session_id(session_id);
     forwardCall.set_sync_data_status(true);
 
     for (int func_i = 0; func_i < func_name_vec.size(); func_i++){
@@ -402,7 +404,7 @@ class CommHelper : public CommHelperInterface {
       if (arg_flag > 0){
         for (int i = 0; i < func_args.size(); i+=3){
           auto arg = req->add_arguments();
-          string key_name = func_args[i] + "|" + func_args[i + 1];
+          string key_name = func_args[i] + kDelimiter + func_args[i + 1];
           arg->set_body(key_name);
           arg->set_arg_flag(arg_flag);
           arg->set_data_address(get_data_server_addr(key_name));
@@ -497,7 +499,7 @@ class CommHelper : public CommHelperInterface {
 
           resp.data_key_ = key;
           resp.data_size_ = lww_lattice.reveal().value.size();
-          string local_key_name = kvsKeyPrefix + "|" + key;
+          string local_key_name = kvsKeyPrefix + kDelimiter + key;
           
           copy_func_(local_key_name, lww_lattice.reveal().value.c_str(), resp.data_size_);
           comm_resps.push_back(resp);
@@ -555,6 +557,8 @@ class CommHelper : public CommHelperInterface {
     resp.app_name_ = call.app_name();
     resp.msg_type_ = RecvMsgType::Call;
     resp.resp_address_ = call.resp_address();
+    resp.session_id_ = call.session_id();
+    resp.sync_data_status_ = call.sync_data_status();
 
     for (auto &req : call.requests()){
       resp.func_name_.push_back(req.name());

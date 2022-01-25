@@ -1,8 +1,8 @@
 #include "coord_handlers.hpp"
 
-void trigger_op_handler(logger log, string &serialized, string &private_ip, unsigned &thread_id, SocketCache &pushers, 
-                        map<Bucket, ValueType> &bucket_type_map,
+void trigger_op_handler(logger log, string &serialized, string &private_ip, unsigned &thread_id, SocketCache &pushers,
                         map<Bucket, vector<TriggerPointer>> &bucket_triggers_map,
+                        map<Bucket, string> &bucket_app_map,
                         map<Address, NodeStatus> &node_status_map){
   TriggerOperationRequest request;
   request.ParseFromString(serialized);
@@ -17,7 +17,7 @@ void trigger_op_handler(logger log, string &serialized, string &private_ip, unsi
   response.set_trigger_name(trigger_name);
 
   if (request.operation_type() == TriggerOperationType::ADD_TRIGGER) {
-    if (bucket_type_map.find(bucket_name) != bucket_type_map.end()) {
+    if (bucket_app_map.find(bucket_name) != bucket_app_map.end()) {
       auto trigger_ptr = gen_trigger_pointer(request.primitive_type(), trigger_name, request.primitive());
       if (trigger_ptr != nullptr){
         trigger_ptr->set_trigger_option(request.trigger_option());
@@ -35,7 +35,7 @@ void trigger_op_handler(logger log, string &serialized, string &private_ip, unsi
     }
   }
   else if (request.operation_type() == TriggerOperationType::DELETE_TRIGGER) {
-    if (bucket_type_map.find(bucket_name) != bucket_type_map.end()) {
+    if (bucket_app_map.find(bucket_name) != bucket_app_map.end()) {
       bool find_trigger = false;
 
       for (auto it = bucket_triggers_map[bucket_name].begin(); it != bucket_triggers_map[bucket_name].end();) {

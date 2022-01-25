@@ -1,7 +1,6 @@
 #include "coord_handlers.hpp"
 
-void app_register_handler(logger log, string &serialized, string &private_ip, unsigned &thread_id, SocketCache &pushers, 
-                        map<Bucket, ValueType> &bucket_type_map, 
+void app_register_handler(logger log, string &serialized, string &private_ip, unsigned &thread_id, SocketCache &pushers,
                         map<Bucket, vector<TriggerPointer>> &bucket_triggers_map,
                         map<string, set<string>> &app_buckets_map,
                         map<Bucket, string> &bucket_app_map,
@@ -28,7 +27,6 @@ void app_register_handler(logger log, string &serialized, string &private_ip, un
     else{
       string tgt_function = dependency.tgt_functions(0);
       string bucket_name = "b_" + tgt_function;
-      bucket_type_map[bucket_name] = ValueType::NORMAL;
       app_buckets_map[appRegist.app_name()].insert(bucket_name);
       bucket_app_map[bucket_name] = appRegist.app_name();
 
@@ -68,7 +66,6 @@ void app_register_handler(logger log, string &serialized, string &private_ip, un
       else if (dependency.type() == DependencyType::PERIODIC){
         string tgt_function = dependency.tgt_functions(0);
         string bucket_name = "b_" + tgt_function;
-        bucket_type_map[bucket_name] = ValueType::NORMAL;
         app_buckets_map[appRegist.app_name()].insert(bucket_name);
         bucket_app_map[bucket_name] = appRegist.app_name();
 

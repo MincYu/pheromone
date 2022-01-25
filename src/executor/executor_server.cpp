@@ -89,19 +89,21 @@ void run(Address ip, unsigned thread_id) {
         update_status(thread_id, true);
 
         uint8_t arg_flag = str[1] - 1;
-        uint8_t resp_address_flag = str[2];
+        uint8_t persist_output_flag = str[2];
 
         string msg(str + 3);
         vector<string> func_with_args;
         split(msg, '|', func_with_args);
 
-        string resp_address = resp_address_flag == 1 ? emptyString : func_with_args[0];
-        if (resp_address_flag != 1) func_with_args.erase(func_with_args.begin());
+        string session_id = func_with_args[0];
+        func_with_args.erase(func_with_args.begin());
+        
         string func_name = func_with_args[0];
         // int func_id = stoi(func_with_args[1]);
 
         static_cast<UserLibrary*>(user_lib)->set_function_name(func_name);
-        static_cast<UserLibrary*>(user_lib)->set_resp_address(resp_address);
+        static_cast<UserLibrary*>(user_lib)->set_session_id(session_id);
+        static_cast<UserLibrary*>(user_lib)->set_persist_flag(persist_output_flag);
         if (name_func_map.find(func_name) == name_func_map.end()){
           // read .so from shared memory dir
           if(!load_function(log, func_name, name_func_map)){
@@ -139,7 +141,7 @@ void run(Address ip, unsigned thread_id) {
             arg_values = new char*[arg_size];
 
             for (int i = 1; i < func_with_args.size(); i+=3){
-              string key_name = func_with_args[i] + "|" + func_with_args[i + 1];
+              string key_name = func_with_args[i] + kDelimiter + func_with_args[i + 1];
               auto shm_obj_size = stoi(func_with_args[i + 2]);
               auto shm_id = ipc::shm::acquire(key_name.c_str(), shm_obj_size, ipc::shm::open);
               auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
