@@ -80,7 +80,7 @@ void notify_handler(logger log, string &serialized, SocketCache &pushers,
           internalCall.set_app_name(bucket_app_map[bucket_key.bucket_]);
           internalCall.set_resp_address(key_notif_request.response_address());
           internalCall.set_sync_data_status(true);
-          internalCall.set_session_id(action.session_keys_.back().first);
+          internalCall.set_session_id(bucket_key.session_);
           auto req = internalCall.add_requests();
           req->set_name(action.function_);
 
@@ -203,6 +203,7 @@ void notify_handler(logger log, string &serialized, SocketCache &pushers,
         TriggerEntity *entity = coord_msg.add_triggers();
         entity->set_bucket_name(bucket_key.bucket_);
         entity->set_trigger_name(name);
+        entity->set_session(bucket_key.session_);
       }
       
       string msg_serialized;

@@ -15,17 +15,6 @@
 #include "common.hpp"
 #include "trigger.hpp"
 
-struct TriggerFunctionMetadata {
-  string func_name_;
-  vector<string> func_args_;
-  int arg_flag_;
-
-  TriggerFunctionMetadata(string &func_name, vector<string> &func_args, int &arg_flag):
-    func_name_(func_name),
-    func_args_(func_args),
-    arg_flag_(arg_flag) {}
-};
-
 void copy_to_shm_obj(string &key_name, const char* data_src, unsigned data_size);
 
 pair<char*, unsigned> get_shm_obj(string &key_name);

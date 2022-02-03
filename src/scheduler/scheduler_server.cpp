@@ -29,7 +29,7 @@ map<uint8_t, shm_chan_t*> executor_chans_map;
 std::atomic<bool> is_quit__{ false };
 
 unsigned forwardDataPackingThreshold = 10240; // pack data into request if data size < 10KB 
-unsigned schedTimerThreshold = 10; // every 100 ms
+unsigned schedTimerThreshold = 10; // every 10 ms
 unsigned ramSeed = time(NULL);
 string funcDir;
 unsigned schedDelayTime; // delay time in us
@@ -41,6 +41,18 @@ queue<DelayFunctionCall> delay_call_queue;
 map<string, unsigned> key_len_map;
 map<string, string> key_val_map;
 map<string, string> session_client_addr_map;
+
+struct RerunCheckQueueItem {
+  TimePoint check_time_; // checking timestamp in ms
+  string session_;
+  TriggerPointer trigger_ptr_;
+};
+
+auto rerun_check_queue_compare = [](RerunCheckQueueItem first, RerunCheckQueueItem second) {return first.check_time_ < second.check_time_;};
+using RerunCheckQueue = std::priority_queue<RerunCheckQueueItem, vector<RerunCheckQueueItem>, decltype(rerun_check_queue_compare)>;
+
+RerunCheckQueue rerun_check_queue(rerun_check_queue_compare);
+map<string, vector<RerunTriggerTimeout>> func_trigger_timeout_map;
 
 inline int get_avail_executor_num(map<uint8_t, uint8_t> &executor_status_map){
   int executors = 0;
@@ -155,12 +167,19 @@ void schedule_func_call(logger log, CommHelperInterface *helper, map<uint8_t, ui
     }
     resp += func_args_string;
     
-    auto sched_time = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+    auto sched_time = std::chrono::system_clock::now();
+    auto sched_stamp = std::chrono::duration_cast<std::chrono::microseconds>(sched_time.time_since_epoch()).count();
 
-    log->info("Schedule function {} with arg_flag {} to executor {}. sched_time: {}", func_name, arg_flag, executor_id, sched_time);
+    log->info("Schedule function {} with arg_flag {} to executor {}. sched_time: {}", func_name, arg_flag, executor_id, sched_stamp);
     send_to_executer(executor_chans_map[executor_id], resp);
     executor_status_map[executor_id] = 2;
+
+    // update rerun check queue
+    for (auto &func_rerun_meta: func_trigger_timeout_map[func_name]){
+      func_rerun_meta.trigger_ptr_->notify_source_func(func_name, session_id, func_args, arg_flag);
+      auto check_time = sched_time + std::chrono::milliseconds(func_rerun_meta.timeout_);
+      rerun_check_queue.push({check_time, session_id, func_rerun_meta.trigger_ptr_});
+    }
   }
   else{
     // log->info("No local executor available in scheduling.");
@@ -461,7 +480,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
     }
 
     // handle message from comm_helper
-    auto comm_resps = helper->try_recv_msg(bucket_triggers_map, app_info_map, func_app_map, bucket_app_map);
+    auto comm_resps = helper->try_recv_msg(bucket_triggers_map, app_info_map, func_app_map, bucket_app_map, func_trigger_timeout_map);
     for (auto &comm_resp : comm_resps) {
       if (comm_resp.msg_type_ == RecvMsgType::Call) {
         session_client_addr_map[comm_resp.session_id_] = comm_resp.resp_address_;
@@ -629,9 +648,22 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(report_end - report_start).count();
 
     if (duration >= schedTimerThreshold) {
-      report_start = std::chrono::system_clock::now();
+      // rerun check
+      while (!rerun_check_queue.empty() && rerun_check_queue.top().check_time_ <= report_end) {
+        auto item = rerun_check_queue.top();
+        auto func_trigger_meta = item.trigger_ptr_->action_for_rerun(item.session_);
+        for (auto &func_metadata : func_trigger_meta) {
+          schedule_func_call(log, helper, executor_status_map, function_executor_map, item.session_, 
+                            func_app_map[func_metadata.func_name_], func_metadata.func_name_, 
+                            func_metadata.func_args_, func_metadata.arg_flag_);
+        }
+        rerun_check_queue.pop();
+      }
+
       // TODO update function locations
       helper->update_status(get_avail_executor_num(executor_status_map), function_cache);
+
+      report_start = std::chrono::system_clock::now();
     }
   }
   std::cout << __func__ << ": quit...\n";

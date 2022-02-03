@@ -5,14 +5,14 @@ USER root
 
 WORKDIR /
 # under test
-# TODO use github repo in building
-COPY . /pheromone
-# RUN git clone https://github.com/MincYu/pheromone.git
+# COPY . /pheromone
+# use github repo in building
+RUN git clone -b dev https://github.com/MincYu/pheromone.git
 
 WORKDIR $PHERO_HOME
-# RUN apt-get update
-# RUN DEBIAN_FRONTEND=noninteractive apt-get install libopencv-dev python-opencv --assume-yes
-# RUN apt-get install -y yasm
+RUN apt-get update
+RUN DEBIAN_FRONTEND=noninteractive apt-get install libopencv-dev python-opencv --assume-yes
+RUN apt-get install -y yasm
 RUN bash scripts/build.sh -g -bRelease
 
 WORKDIR /

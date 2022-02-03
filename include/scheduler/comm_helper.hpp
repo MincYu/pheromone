@@ -44,6 +44,12 @@ struct InflightFuncArgs {
   int arg_flag_;
 };
 
+struct RerunTriggerTimeout {
+  TriggerPointer trigger_ptr_;
+  unsigned timeout_;
+};
+
+
 enum SecondaryThreadMsgType {SendReq, GetKvs, PutKvs};
 struct SecondaryThreadMsg {
   SecondaryThreadMsgType msg_type_;
@@ -96,7 +102,7 @@ class CommHelperInterface {
   virtual void set_logger(logger log) = 0;
   virtual void update_status(int avail_executors, set<string> &function_cache) = 0;
   virtual vector<RecvMsg> try_recv_msg(map<Bucket, vector<TriggerPointer>> &bucket_triggers_map, map<string, AppInfo> &app_info_map, 
-                              map<string, string> &func_app_map, map<string, string> &bucket_app_map) = 0;
+                              map<string, string> &func_app_map, map<string, string> &bucket_app_map, map<string, vector<RerunTriggerTimeout>> &func_trigger_timeout_map) = 0;
   virtual void forward_func_call(string &resp_address, string &app_name, vector<string> &func_name_vec, vector<vector<string>> &func_args_vec, int arg_flag, string &session_id) = 0;
   virtual void send_data_req(string &key) = 0;
   // virtual void send_data_resp(string &key, char* data_ptr, unsigned data_size) = 0;
@@ -246,7 +252,7 @@ class CommHelper : public CommHelperInterface {
   }
 
   vector<RecvMsg> try_recv_msg(map<Bucket, vector<TriggerPointer>> &bucket_triggers_map, map<string, AppInfo> &app_info_map, 
-                      map<string, string> &func_app_map, map<string, string> &bucket_app_map){
+                      map<string, string> &func_app_map, map<string, string> &bucket_app_map,  map<string, vector<RerunTriggerTimeout>> &func_trigger_timeout_map){
     kZmqUtil->poll(0, &zmq_pollitems_);
 
     vector<RecvMsg> comm_resps;
@@ -257,7 +263,7 @@ class CommHelper : public CommHelperInterface {
       coord_msg.ParseFromString(serialized);
       int update_msg_type = coord_msg.msg_type();
       if (update_msg_type == 0){
-        // dependency msg
+        // add dependency and triggers
         string coord_ip = coord_msg.ip();
         unsigned thread_id = coord_msg.thread_id();
         HandlerThread coord_thread(coord_ip, thread_id);
@@ -283,15 +289,6 @@ class CommHelper : public CommHelperInterface {
 
         for (const auto &trigger : coord_msg.triggers()) {
           Bucket bucket_name = trigger.bucket_name();
-          // delete existing triggers in bucket
-          auto iter = bucket_triggers_map.find(bucket_name);
-          if ( iter != bucket_triggers_map.end()) {
-            bucket_triggers_map.erase(iter);
-          }
-        }
-
-        for (const auto &trigger : coord_msg.triggers()) {
-          Bucket bucket_name = trigger.bucket_name();
           bucket_coord_map_[bucket_name] = coord_thread;
           app_info_map[app_name].buckets_.push_back(bucket_name);
           bucket_app_map[bucket_name] = app_name;
@@ -302,18 +299,39 @@ class CommHelper : public CommHelperInterface {
             if (trigger_ptr != nullptr){
               trigger_ptr->set_trigger_option(trigger.trigger_option());
               bucket_triggers_map[bucket_name].push_back(trigger_ptr);
+              vector<RerunMetadata> rerun_meta;
+              for (const auto &hint : trigger.hints()) {
+                rerun_meta.push_back({hint.source_function(), hint.source_key(), hint.timeout()});
+                // TODO avoid rerun multuple times while still performing at the view of triggers
+                func_trigger_timeout_map[hint.source_function()].push_back({trigger_ptr, hint.timeout()});
+              }
+              trigger_ptr->set_rerun_metadata(rerun_meta);
             }
           }
         }
       }
       else if (update_msg_type == 1) {
-        // trigger msg
+        // sync trigger msg for clear
+        for (const auto &trigger_msg : coord_msg.triggers()) {
+          Bucket bucket_name = trigger_msg.bucket_name();
+          string trigger_name = trigger_msg.trigger_name();
+          for (auto &trigger : bucket_triggers_map[bucket_name]) {
+            if (trigger->get_trigger_name() == trigger_name) trigger->clear(trigger_msg.session());
+          }
+        }
+      }
+      else if (update_msg_type == 2) {
+        // delete triggers
         for (const auto &trigger : coord_msg.triggers()) {
           Bucket bucket_name = trigger.bucket_name();
           string trigger_name = trigger.trigger_name();
-          for (auto &trigger : bucket_triggers_map[bucket_name]) {
-            if (trigger->get_trigger_name() == trigger_name) trigger->clear();
+          
+          auto iter = bucket_triggers_map[bucket_name].begin();
+          while((*iter)->get_trigger_name() != trigger_name) iter++;
+          if ( iter != bucket_triggers_map[bucket_name].end()) {
+            bucket_triggers_map[bucket_name].erase(iter);
           }
+          // TODO delete func_trigger_timeout_map
         }
       }
 

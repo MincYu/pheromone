@@ -19,6 +19,8 @@ def generate_timestamp(tid=1):
         p *= 10
     return int(t * p + tid)
 
+default_rerun_timeout = 3000
+
 class PheromoneClient():
     def __init__(self, mngt_ip, kvs_addr, ip, thread_id=0, context=None):
         if not context:
@@ -102,7 +104,7 @@ class PheromoneClient():
             logging.error('Error {} in deleting bucket {}'.format(response.error, bucket_name))
             return False
 
-    def add_trigger(self, app_name, bucket_name, trigger_name, primitive_type, primitive, trigger_option=0):
+    def add_trigger(self, app_name, bucket_name, trigger_name, primitive_type, primitive, trigger_option=0, hints=None):
         coord_thread = self._try_get_app_coord(app_name)
 
         req = TriggerOperationRequest()
@@ -146,8 +148,25 @@ class PheromoneClient():
             prm = ByTimePrimitive()
             prm.function = primitive['function']
             prm.time_window = primitive['time_window']
-
+        
         req.primitive = prm.SerializeToString()
+
+        def parse_hints(req, hint):
+            h = req.hints.add()
+            h.source_function = hint[0]
+            if len(hint) > 2:
+                h.source_key = hint[1]
+            h.timeout = hint[2] if len(hint) > 3 else default_rerun_timeout
+
+        if hints is not None: 
+            if isinstance(hints, tuple):
+                parse_hints(req, hints)
+            elif isinstance(hints, list):
+                for hint in hints:
+                    parse_hints(req, hint)
+            else:
+                logging.error('Unregnized hints {}'.format(hints))
+                return False
         send_sock = self.pusher_cache.get(coord_thread.trigger_op_connect_address())
 
         send_request(req, send_sock)

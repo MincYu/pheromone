@@ -181,6 +181,14 @@ message BucketOperationResponse {
   KVSError error = 4;
 }
 
+message RerunHint {
+  string source_function = 1;
+
+  string source_key = 2;
+
+  uint32 timeout = 3;
+}
+
 message TriggerOperationRequest {
   TriggerOperationType operation_type = 1;
 
@@ -199,6 +207,9 @@ message TriggerOperationRequest {
   string request_id = 8;
 
   string response_address = 9;
+
+  // hints for re-execution
+  repeated RerunHint hints = 10;
 }
 
 message TriggerOperationResponse {
@@ -217,14 +228,11 @@ message ImmediatePrimitive {
   // The function to trigger, can be name, http endpoint, etc. 
   string function = 1;
 
-  // uint32 id = 2;
 }
 
 message ByNamePrimitive {
   // The function to trigger, can be name, http endpoint, etc. 
   string function = 1;
-
-  // uint32 id = 2;
 
   string key_name = 2;
 }
@@ -233,16 +241,12 @@ message ByBatchSizePrimitive {
   // The function to trigger, can be name, http endpoint, etc. 
   string function = 1;
 
-  // uint32 id = 2;
-
   uint32 count = 2;
 }
 
 message BySetPrimitive {
   // The function to trigger, can be name, http endpoint, etc. 
   string function = 1;
-  
-  // uint32 id = 2;
 
   repeated string key_set = 2;
 }
@@ -287,6 +291,10 @@ message TriggerEntity {
   PrimitiveType primitive_type = 4;
   
   bytes primitive = 5;
+
+  string session = 6;
+
+  repeated RerunHint hints = 7;
 }
 
 message UpdateCoordMsg {

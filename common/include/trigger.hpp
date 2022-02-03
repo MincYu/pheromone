@@ -15,6 +15,18 @@ struct TriggerAction {
   // bool will_read_;
 };
 
+struct TriggerFunctionMetadata {
+  string func_name_;
+  vector<string> func_args_;
+  int arg_flag_;
+};
+
+struct RerunMetadata {
+  string source_func_;
+  string source_key_;
+  unsigned timeout_;
+};
+
 class Trigger {
   protected:
     string target_function_;
@@ -32,14 +44,13 @@ class Trigger {
 
     virtual ~Trigger() = default;
 
-    /**
-     * Action to take given the new object
-     * it includes the function name if it decides to trigger the execution,
-     * or a empty string if no action is needed
-     */ 
     virtual vector<TriggerAction> action_for_new_object(const BucketKey &bucket_key) = 0;
     virtual string dump_pritimive() = 0;
-    virtual void clear() = 0;
+    virtual void clear(const string &session) = 0;
+
+    virtual void notify_source_func(string &func_name, string &session_id, vector<string> &func_args, int arg_flag) {};
+    virtual vector<TriggerFunctionMetadata> action_for_rerun(string &session_id) { return {}; };
+    virtual void set_rerun_metadata(vector<RerunMetadata> &rerun_metadata) {};
 
     string get_trigger_name(){ return trigger_name_;}
     PrimitiveType get_type(){ return type_;}
@@ -55,10 +66,21 @@ class ImmediateTrigger : public Trigger {
       Trigger(function_name, trigger_name, PrimitiveType::IMMEDIATE) {}
 
     vector<TriggerAction> action_for_new_object(const BucketKey &bucket_key) {
+      session_status_cache_.erase(bucket_key.session_);
       TriggerAction action = {target_function_, {std::make_pair(bucket_key.session_, bucket_key.key_)}};
       return vector<TriggerAction>{action};
     }
 
+    void notify_source_func(string &func_name, string &session_id, vector<string> &func_args, int arg_flag) {
+      session_status_cache_[session_id] = {func_name, func_args, arg_flag};
+    }
+
+    vector<TriggerFunctionMetadata> action_for_rerun(string &session_id) {
+      if (session_status_cache_.find(session_id) != session_status_cache_.end()){
+        return {session_status_cache_[session_id]};
+      }
+    }
+  
     string dump_pritimive(){
       ImmediatePrimitive primitive;
       primitive.set_function(target_function_);
@@ -68,8 +90,10 @@ class ImmediateTrigger : public Trigger {
       return prm_serialized;
     }
 
-    void clear() {};
-
+    void clear(const string &session) {}
+  
+  private:
+    map<string, TriggerFunctionMetadata> session_status_cache_;
 };
 
 class ByNameTrigger : public Trigger {
@@ -79,6 +103,7 @@ class ByNameTrigger : public Trigger {
       key_name_(key_name) {}
 
     vector<TriggerAction> action_for_new_object(const BucketKey &bucket_key) {
+      session_status_cache_.erase(bucket_key.session_);
       vector<TriggerAction> actions;
       if (bucket_key.key_ == key_name_) {
         TriggerAction action;
@@ -90,6 +115,16 @@ class ByNameTrigger : public Trigger {
       return actions;
     }
 
+    void notify_source_func(string &func_name, string &session_id, vector<string> &func_args, int arg_flag) {
+      session_status_cache_[session_id] = {func_name, func_args, arg_flag};
+    }
+
+    vector<TriggerFunctionMetadata> action_for_rerun(string &session_id) {
+      if (session_status_cache_.find(session_id) != session_status_cache_.end()){
+        return {session_status_cache_[session_id]};
+      }
+    }
+  
     string dump_pritimive(){
       ByNamePrimitive primitive;
       primitive.set_function(target_function_);
@@ -100,11 +135,11 @@ class ByNameTrigger : public Trigger {
       return prm_serialized;
     }
   
-    void clear() {};
+    void clear(const string &session) {}
 
   private:
     string key_name_;
-
+    map<string, TriggerFunctionMetadata> session_status_cache_;
 };
 
 class ByBatchSizeTrigger : public Trigger {
@@ -117,15 +152,28 @@ class ByBatchSizeTrigger : public Trigger {
       vector<TriggerAction> actions;
       
       buffer_.push_back(std::make_pair(bucket_key.session_, bucket_key.key_));
+      // clear the session status cache
+      session_status_cache_.erase(bucket_key.session_);
+
       if (buffer_.size() >= count_) {
         TriggerAction action;
         action.function_ = target_function_;
         action.session_keys_ = std::move(buffer_);
         actions.push_back(action);
-        clear();
+        buffer_.clear();
       }
       
       return actions;
+    }
+
+    void notify_source_func(string &func_name, string &session_id, vector<string> &func_args, int arg_flag) {
+      session_status_cache_[session_id] = {func_name, func_args, arg_flag};
+    }
+
+    vector<TriggerFunctionMetadata> action_for_rerun(string &session_id) {
+      if (session_status_cache_.find(session_id) != session_status_cache_.end()){
+        return {session_status_cache_[session_id]};
+      }
     }
   
     string dump_pritimive(){
@@ -138,13 +186,15 @@ class ByBatchSizeTrigger : public Trigger {
       return prm_serialized;
     }
 
-    void clear() {
+    void clear(const string &session) {
       buffer_.clear();
+      session_status_cache_.clear();
     };
 
   private:
     int count_;
     vector<pair<Session, Key>> buffer_;
+    map<string, TriggerFunctionMetadata> session_status_cache_;
 };
 
 class BySetTrigger : public Trigger {
@@ -158,6 +208,7 @@ class BySetTrigger : public Trigger {
       
       if (key_set_.find(bucket_key.key_) != key_set_.end()) {
         session_prepared_keys_map_[bucket_key.session_].insert(bucket_key.key_);
+        session_status_cache_.erase(bucket_key.key_ + bucket_key.session_);
         if (session_prepared_keys_map_[bucket_key.session_].size() == key_set_.size()) {
           TriggerAction action;
           action.function_ = target_function_;
@@ -169,6 +220,31 @@ class BySetTrigger : public Trigger {
         }
       }
       return actions;
+    }
+
+    void notify_source_func(string &func_name, string &session_id, vector<string> &func_args, int arg_flag) {
+      if (!func_key_map_.empty()) {
+        session_status_cache_[func_key_map_[func_name] + session_id] = {func_name, func_args, arg_flag};
+      }
+    }
+
+    vector<TriggerFunctionMetadata> action_for_rerun(string &session_id) {
+      if (!func_key_map_.empty()) {
+        vector<TriggerFunctionMetadata> rerun_funcs;
+        for (auto &key : key_set_) {
+          if (session_status_cache_.find(key + session_id) != session_status_cache_.end()){
+            rerun_funcs.push_back(session_status_cache_[key + session_id]);
+          }
+        }
+        return rerun_funcs;
+      }
+      else {
+        return {};
+      }
+    }
+    
+    void set_rerun_metadata(vector<RerunMetadata> &rerun_metadata) {
+      for (auto &meta : rerun_metadata) func_key_map_[meta.source_func_] = meta.source_key_;
     }
 
     string dump_pritimive(){
@@ -183,18 +259,25 @@ class BySetTrigger : public Trigger {
       return prm_serialized;
     }
 
-    void clear() {
-      session_prepared_keys_map_.clear();
-    };
+    void clear(const string &session) {
+      session_prepared_keys_map_.erase(session);
+      session_status_cache_.erase(session);
+    }
 
   private:
     set<Key> key_set_;
     map<Session, set<Key>> session_prepared_keys_map_;
+    map<string, Key> func_key_map_;
+    map<string, TriggerFunctionMetadata> session_status_cache_;
 };
 
 
 const string group_delimiter = ":";
 const string control_group_prefix = "ctrl";
+/**
+ * currently this triggrt is session-agnostic
+ * TODO add session support in future
+ */ 
 class DynamicGroupTrigger : public Trigger {
   public:
     DynamicGroupTrigger(const string &function_name, const string &trigger_name, const set<string> &control_group): 
@@ -219,7 +302,8 @@ class DynamicGroupTrigger : public Trigger {
             }
             actions.push_back(action);
           }
-          clear();
+          data_group_keys_map_.clear();
+          cur_control_keys_.clear();
         }
       }
       else {
@@ -240,7 +324,7 @@ class DynamicGroupTrigger : public Trigger {
       return prm_serialized;
     }
 
-    void clear() {
+    void clear(const string &session) {
       data_group_keys_map_.clear();
       cur_control_keys_.clear();
     }
@@ -286,7 +370,7 @@ class RedundantTrigger : public Trigger {
       return prm_serialized;
     }
 
-    void clear() {
+    void clear(const string &session) {
       count_ += k_;
       buffer_.clear();
     }
@@ -315,7 +399,7 @@ class ByTimeTrigger : public Trigger {
       if (std::chrono::duration_cast<std::chrono::milliseconds>(cur_stamp - last_trigger_stamp_).count() >= time_window_){
         actions.push_back({target_function_, buffer_});
         last_trigger_stamp_ = cur_stamp;
-        clear();
+        buffer_.clear();
       }
       return actions;
     }
@@ -330,7 +414,7 @@ class ByTimeTrigger : public Trigger {
       return prm_serialized;
     }
 
-    void clear() {buffer_.clear();}
+    void clear(const string &session) {buffer_.clear();}
 
   private:
     unsigned time_window_;

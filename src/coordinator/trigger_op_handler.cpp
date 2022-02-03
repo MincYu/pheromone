@@ -16,6 +16,12 @@ void trigger_op_handler(logger log, string &serialized, string &private_ip, unsi
   string trigger_name = request.trigger_name();
   response.set_trigger_name(trigger_name);
 
+  // Update triggers to local schedulers
+  UpdateCoordMsg trigger_msg;
+  trigger_msg.set_ip(private_ip);
+  trigger_msg.set_thread_id(thread_id);
+  trigger_msg.set_app_name(request.app_name());
+
   if (request.operation_type() == TriggerOperationType::ADD_TRIGGER) {
     if (bucket_app_map.find(bucket_name) != bucket_app_map.end()) {
       auto trigger_ptr = gen_trigger_pointer(request.primitive_type(), trigger_name, request.primitive());
@@ -28,6 +34,18 @@ void trigger_op_handler(logger log, string &serialized, string &private_ip, unsi
       }
       response.set_error(KVSError::SUCCESS);
       log->info("Add Trigger {} in Bucket {}.", trigger_name, bucket_name);
+
+      trigger_msg.set_msg_type(0);
+
+      if (trigger_ptr->get_type() != PrimitiveType::BY_TIME) {
+        TriggerEntity *entity = trigger_msg.add_triggers();
+        entity->set_bucket_name(bucket_name);
+        entity->set_trigger_name(trigger_name);
+        entity->set_trigger_option(request.trigger_option());
+        entity->set_primitive_type(request.primitive_type());
+        entity->set_primitive(trigger_ptr->dump_pritimive());
+        entity->mutable_hints()->CopyFrom(request.hints()); 
+      }
     }
     // it means the bucket does not exist, so we just return
     else {
@@ -49,6 +67,11 @@ void trigger_op_handler(logger log, string &serialized, string &private_ip, unsi
         }
       }
       if (find_trigger) {
+        trigger_msg.set_msg_type(2);
+        TriggerEntity *entity = trigger_msg.add_triggers();
+        entity->set_bucket_name(bucket_name);
+        entity->set_trigger_name(trigger_name);
+        
         response.set_error(KVSError::SUCCESS);
         log->info("Delete Trigger {} in Bucket {}.", trigger_name, bucket_name);
       }
@@ -68,29 +91,6 @@ void trigger_op_handler(logger log, string &serialized, string &private_ip, unsi
   string resp_serialized;
   response.SerializeToString(&resp_serialized);
   kZmqUtil->send_string(resp_serialized, &pushers[request.response_address()]);
-
-  // Update triggers to local schedulers
-  UpdateCoordMsg trigger_msg;
-  trigger_msg.set_ip(private_ip);
-  trigger_msg.set_thread_id(thread_id);
-  trigger_msg.set_app_name(request.app_name());
-  trigger_msg.set_msg_type(0);
-
-  for (auto &bucket_trigger : bucket_triggers_map){
-    Bucket bucket = bucket_trigger.first;
-    for (auto trigger_ptr : bucket_trigger.second){
-      // skip time window
-      if (trigger_ptr->get_type() == PrimitiveType::BY_TIME) {
-        continue;
-      }
-      TriggerEntity *entity = trigger_msg.add_triggers();
-      entity->set_bucket_name(bucket);
-      entity->set_trigger_name(trigger_ptr->get_trigger_name());
-      entity->set_trigger_option(trigger_ptr->get_trigger_option());
-      entity->set_primitive_type(trigger_ptr->get_type());
-      entity->set_primitive(trigger_ptr->dump_pritimive());
-    }
-  }
 
   string trigger_serialized;
   trigger_msg.SerializeToString(&trigger_serialized);

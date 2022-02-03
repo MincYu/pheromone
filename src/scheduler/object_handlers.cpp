@@ -55,7 +55,7 @@ void check_object_arrival(logger log, BucketKey &bucket_key, map<Bucket,
             func_args.push_back(std::to_string(key_len_map[key_name]));
           }
         }
-        active_func_metadata.push_back(TriggerFunctionMetadata(action.function_, func_args, arg_flag));
+        active_func_metadata.push_back({action.function_, func_args, arg_flag});
       }
     }
   }
