@@ -741,7 +741,7 @@ int main(int argc, char *argv[]) {
       secondary_thread_msg_queues.push_back(msg_queue);
       CommRespQueue resp_queue;
       resp_queues.push_back(resp_queue);
-      kvs_clients.push_back(new KvsClient(kvs_routing_threads, ip, 0, 30000));
+      kvs_clients.push_back(new KvsClient(kvs_routing_threads, ip, thread_id, 30000));
 
       io_threads.push_back(std::thread(&CommHelper::run_io_thread_loop, &helper, ip, thread_id));
     }

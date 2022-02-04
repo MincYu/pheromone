@@ -27,7 +27,7 @@ spec:
         - name: MANAGEMENT
           value: MANAGEMENT_DUMMY
         - name: COORD_THREADS
-          value: "3"
+          value: "1"
         - name: IO_THREADS
           value: "1"
         - name: ROLE

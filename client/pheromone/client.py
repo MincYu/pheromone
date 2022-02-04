@@ -279,7 +279,7 @@ class PheromoneClient():
             r = CoordResponse()
             r.ParseFromString(self.mngt_socket.recv())
             self.app_coords[app_name] = OperationThread(r.coord_ip, r.thread_id)
-            # print(f'Query from management. {r.coord_ip}, {r.thread_id}')
+            print(f'Query from management. {r.coord_ip}, {r.thread_id}')
         
         return self.app_coords[app_name]
 

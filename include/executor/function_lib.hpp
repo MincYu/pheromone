@@ -22,6 +22,7 @@ class EpheObjectImpl : public EpheObject {
   public:
     EpheObjectImpl(string obj_name, size_t size, bool create) {
       size_ = size;
+      obj_name_ = obj_name;
       if (create) {
         // shm_id_ = ipc::shm::acquire(obj_name_.c_str(), size_, ipc::shm::create);
         shm_id_ = ipc::shm::acquire(obj_name_.c_str(), size_);
