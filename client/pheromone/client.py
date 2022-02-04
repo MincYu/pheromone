@@ -154,7 +154,7 @@ class PheromoneClient():
         def parse_hints(req, hint):
             h = req.hints.add()
             h.source_function = hint[0]
-            if len(hint) > 2:
+            if hint[1] is not None:
                 h.source_key = hint[1]
             h.timeout = hint[2] if len(hint) > 3 else default_rerun_timeout
 

@@ -79,6 +79,7 @@ class ImmediateTrigger : public Trigger {
       if (session_status_cache_.find(session_id) != session_status_cache_.end()){
         return {session_status_cache_[session_id]};
       }
+      return {};
     }
   
     string dump_pritimive(){
@@ -123,6 +124,7 @@ class ByNameTrigger : public Trigger {
       if (session_status_cache_.find(session_id) != session_status_cache_.end()){
         return {session_status_cache_[session_id]};
       }
+      return {};
     }
   
     string dump_pritimive(){
@@ -174,6 +176,7 @@ class ByBatchSizeTrigger : public Trigger {
       if (session_status_cache_.find(session_id) != session_status_cache_.end()){
         return {session_status_cache_[session_id]};
       }
+      return {};
     }
   
     string dump_pritimive(){
