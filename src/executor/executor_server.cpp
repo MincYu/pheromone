@@ -223,7 +223,6 @@ int main(int argc, char *argv[]) {
     std::cout << "Read file config.yml" << std::endl;
 
     funcDir = conf["func_dir"].as<string>();
-    std::cout << funcDir << std::endl;
 
     if (YAML::Node wait_tm = conf["wait"]) {
       RecvWaitTm = wait_tm.as<unsigned>();
