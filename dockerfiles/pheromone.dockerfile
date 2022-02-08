@@ -5,7 +5,7 @@ USER root
 
 WORKDIR /
 # COPY . /pheromone
-RUN git clone https://github.com/MincYu/pheromone.git
+RUN git clone https://github.com/Tingjia980311/pheromone.git
 
 WORKDIR $PHERO_HOME
 RUN apt-get update
