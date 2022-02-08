@@ -618,7 +618,7 @@ class CommHelper : public CommHelperInterface {
               body_int += ",";
             }
             body_int += "]";
-            args.push_back(arg.body());
+            args.push_back(body_int);
           }
         }
         resp.is_func_arg_keys_.push_back(arg_flag);
