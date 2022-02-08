@@ -223,6 +223,7 @@ class PheromoneClient():
             func_req.name = func
             for arg in args:
                 argobj = func_req.arguments.add()
+                # TODO: change arg to int array and set to argobj.body
                 argobj.body = bytes(str(arg), 'utf-8')
                 argobj.arg_flag = 0
         if synchronous:

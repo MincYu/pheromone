@@ -370,6 +370,7 @@ class CommHelper : public CommHelperInterface {
       else {
         for (auto &func_arg: func_args){
           auto arg = req->add_arguments();
+          // TODO: change this string to a int array: func_arg -> int array
           arg->set_body(func_arg);
           arg->set_arg_flag(arg_flag);
         }
@@ -601,6 +602,7 @@ class CommHelper : public CommHelperInterface {
       resp.resp_address_ = call.resp_address();
       for (auto &req : call.requests()){
         resp.func_name_.push_back(req.name());
+        // TODO: the arg is now a list of int arrays, We need to serialize it to string before add to Resp
         vector<string> args;
         int arg_flag = 0;
         for (auto &arg : req.arguments()){
@@ -647,6 +649,8 @@ class CommHelper : public CommHelperInterface {
       if (data_info_pair.second > 0){
         // we use low-level interface to avoid data copy
         auto msg_len = key_len + data_info_pair.second + 1;
+        // TODO: change this to a int array
+        // create a general structure in proto, data_reply(key, data (int array))
         zmq::message_t msg(msg_len);
         memcpy(msg.data(), msg_head.c_str(), key_len + 1);
         memcpy(static_cast<char*>(msg.data()) + key_len + 1, data_info_pair.first, data_info_pair.second);
