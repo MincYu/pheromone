@@ -42,7 +42,7 @@ RUN unzip protobuf-all-3.5.1.zip
 # Build and install protobuf. NOTE: this step takes a really long time!
 WORKDIR /protobuf-3.5.1/
 RUN ./autogen.sh
-RUN ./configure CXX=clang++ CXXFLAGS='-std=c++11 -stdlib=libc++ -O3 -g'
+RUN ./configure CXX=g++
 RUN make -j4
 RUN make check -j4
 RUN make install

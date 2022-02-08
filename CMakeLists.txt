@@ -16,13 +16,13 @@ SET(VENDOR_DIR common/hydro-vendor)
 
 IF(${CMAKE_CXX_COMPILER} STREQUAL "/usr/bin/clang++") 
   SET(CMAKE_CXX_FLAGS_COMMON
-      "-std=c++11 \
+      "-std=c++14 \
       -stdlib=libc++ -pthread")
 ENDIF()
 
 IF(${CMAKE_CXX_COMPILER} STREQUAL "/usr/bin/g++") 
   SET(CMAKE_CXX_FLAGS_COMMON
-      "-std=c++11 -pthread")
+      "-std=c++14 -pthread")
 ENDIF()
 
 SET(CMAKE_CXX_FLAGS_DEBUG

@@ -1,4 +1,4 @@
-FROM cheneyyu/faas_base:latest
+FROM tingjia/faas_base:latest
 
 ENV PHERO_HOME /pheromone
 USER root
