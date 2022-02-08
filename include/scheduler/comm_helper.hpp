@@ -322,6 +322,7 @@ class CommHelper : public CommHelperInterface {
 
   void client_response(string &resp_address, string &app_name, string &output_data) {
     FunctionCallResponse client_resp;
+    ArgResp data_resp2;
     client_resp.set_app_name(app_name);
     client_resp.set_error_no(0);
     client_resp.set_output(output_data);
@@ -606,10 +607,18 @@ class CommHelper : public CommHelperInterface {
         vector<string> args;
         int arg_flag = 0;
         for (auto &arg : req.arguments()){
-          args.push_back(arg.body());
           if (arg.arg_flag() > 0) {
             arg_flag = arg.arg_flag();
             key_address_cache_->emplace(arg.body(), arg.data_address());
+            args.push_back(arg.body());
+          } else {
+            string body_int = "[";
+            for (auto &item : arg.body_int()) {
+              body_int += std::to_string(item);
+              body_int += ",";
+            }
+            body_int += "]";
+            args.push_back(arg.body());
           }
         }
         resp.is_func_arg_keys_.push_back(arg_flag);
@@ -648,16 +657,25 @@ class CommHelper : public CommHelperInterface {
 
       if (data_info_pair.second > 0){
         // we use low-level interface to avoid data copy
-        auto msg_len = key_len + data_info_pair.second + 1;
-        // TODO: change this to a int array
-        // create a general structure in proto, data_reply(key, data (int array))
-        zmq::message_t msg(msg_len);
-        memcpy(msg.data(), msg_head.c_str(), key_len + 1);
-        memcpy(static_cast<char*>(msg.data()) + key_len + 1, data_info_pair.first, data_info_pair.second);
-
+        ArgResp data_resp;
+        data_resp.set_key(key);
+        data_resp.set_keylen(static_cast<int>(key_len));
+        
+        string obj_body(data_info_pair.first);
+        auto start = 1U;
+        auto end = obj_body.find(',');
+        while (end != std::string::npos)
+        {
+            string tmp = obj_body.substr(start, end - start);
+            int item = stoi(tmp);
+            data_resp.add_body(item);
+            start = end + 1;
+            end = obj_body.find(',', start);
+        }
         auto send_stamp = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
-        socket_cache_[resp_address].send(msg);
+        // socket_cache_[resp_address].send(msg);
+        send_request(data_resp,  socket_cache_[resp_address]);
 
         auto finish_stamp = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
@@ -674,21 +692,31 @@ class CommHelper : public CommHelperInterface {
     if (zmq_pollitems_[3].revents & ZMQ_POLLIN) {
       auto data_resp_stamp = std::chrono::duration_cast<std::chrono::microseconds>(
           std::chrono::system_clock::now().time_since_epoch()).count();
+
+      string serialized = kZmqUtil->recv_string(&data_access_client_puller_);
       RecvMsg resp;
 
-      zmq::message_t message;
-      data_access_client_puller_.recv(&message);
-      auto resp_str = static_cast<char*>(message.data());
+      ArgResp data_receive;
+      data_receive.ParseFromString(serialized);
+
       resp.msg_type_ = RecvMsgType::DataResp;
-      auto key_len = static_cast<uint8_t>(resp_str[0]);
-      string key(resp_str + 1, key_len);
+      auto key_len = static_cast<uint8_t>(data_receive.keylen());
+
+      string key = data_receive.key();
 
       auto parse_stamp = std::chrono::duration_cast<std::chrono::microseconds>(
           std::chrono::system_clock::now().time_since_epoch()).count();
 
       resp.data_key_ = key;
-      resp.data_size_ = message.size() - key_len - 1;
-      copy_func_(key, resp_str + key_len + 1, resp.data_size_);
+      string body_int = "[";
+      for (auto &item : data_receive.body()) {
+        body_int += std::to_string(item);
+        body_int += ",";
+      }
+      body_int += "]";
+
+      resp.data_size_ = body_int.length();
+      copy_func_(key, body_int.c_str(), resp.data_size_);
       comm_resps.push_back(resp);
 
       auto data_copy_stamp = std::chrono::duration_cast<std::chrono::microseconds>(
