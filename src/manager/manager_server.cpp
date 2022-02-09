@@ -106,13 +106,20 @@ void run(Address ip) {
 }
 
 int main(int argc, char *argv[]) {
-  if (argc != 1) {
+  if (argc > 2) {
     std::cerr << "Usage: " << argv[0] << std::endl;
     return 1;
   }
 
-  YAML::Node conf = YAML::LoadFile("conf/config.yml");
-  Address ip = conf["ip"].as<Address>();
+  YAML::Node conf;
+  Address ip;
+
+  if (argc == 2) 
+    conf = YAML::LoadFile("conf/local.yml")["manager"];
+  else 
+    conf = YAML::LoadFile("conf/config.yml");
+
+  ip = conf["ip"].as<Address>();
   externalUser = conf["external"].as<unsigned>() == 1;
   run(ip);
 }

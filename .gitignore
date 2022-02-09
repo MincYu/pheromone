@@ -6,6 +6,10 @@
 *.pyc
 .coverage
 */__pycache__
+build/*
+log*
+client/pheromone/proto/*
+proto/*
 
 
 ################################################################################

@@ -1,11 +1,11 @@
-FROM cheneyyu/faas_base:latest
+FROM tingjia/faas_base:latest
 
 ENV PHERO_HOME /pheromone
 USER root
 
 WORKDIR /
 # COPY . /pheromone
-RUN git clone https://github.com/MincYu/pheromone.git
+RUN git clone https://github.com/Tingjia980311/pheromone.git
 
 WORKDIR $PHERO_HOME
 RUN apt-get update

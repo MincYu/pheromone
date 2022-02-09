@@ -224,8 +224,8 @@ if __name__ == '__main__':
 
     cluster_name = util.check_or_get_env_arg('PHERO_CLUSTER_NAME')
     kops_bucket = util.check_or_get_env_arg('KOPS_STATE_STORE')
-    aws_key_id = util.check_or_get_env_arg('AWS_ACCESS_KEY_ID')
-    aws_key = util.check_or_get_env_arg('AWS_SECRET_ACCESS_KEY')
+    aws_key_id = '' # util.check_or_get_env_arg('AWS_ACCESS_KEY_ID')
+    aws_key = '' # util.check_or_get_env_arg('AWS_SECRET_ACCESS_KEY')
 
     args = parser.parse_args()
     create_cluster(args.memory[0], args.ebs, args.function[0],

@@ -20,7 +20,7 @@ spec:
       hostIPC: true
       containers:
       - name: client
-        image: cheneyyu/pheromone
+        image: tingjia/pheromone
         imagePullPolicy: Always
         env:
         - name: COORD_IPS
