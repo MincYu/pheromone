@@ -372,6 +372,18 @@ class CommHelper : public CommHelperInterface {
         for (auto &func_arg: func_args){
           auto arg = req->add_arguments();
           // TODO: change this string to a int array: func_arg -> int array
+          string obj_body(func_arg);
+          auto start = 1U;
+          auto end = obj_body.find(',');
+          while (end != std::string::npos)
+          {
+              string tmp = obj_body.substr(start, end - start);
+              int item = stoi(tmp);
+              arg->add_body_int(item);
+              start = end + 1;
+              end = obj_body.find(',', start);
+          }
+
           arg->set_body(func_arg);
           arg->set_arg_flag(arg_flag);
         }
@@ -473,47 +485,6 @@ class CommHelper : public CommHelperInterface {
     log_->info("Thread {} send data request for key {} start {} parse {} at {}.", tid, key, start_stamp, parse_stamp, send_stamp);
   }
 
-  // void send_data_resp(string &key, char* data_ptr, unsigned data_size) {
-  //   if (io_thread_count_ > 1){
-  //     unsigned thread_id = get_io_thread_id(true);
-  //     if (thread_id == 0){
-  //       send_data_resp_base(key, data_ptr, data_size, socket_cache_);
-  //     }
-  //     else {
-  //       log_->info("Push send response msg to thread {}", thread_id);
-  //       SecondaryThreadMsg msg = {SecondaryThreadMsgType::SendResp, key, data_ptr, data_size};
-  //       secondary_thread_msg_queues[thread_id - 1]->push(msg);
-  //     }
-  //   }
-  //   else{
-  //     send_data_resp_base(key, data_ptr, data_size, socket_cache_);
-  //   }
-  // }
-
-  // void send_data_resp_base(string &key, const char* data_ptr, unsigned data_size, SocketCache &pushers, unsigned tid = 0) {
-  //   if(key_requestor_map_->find(key) != key_requestor_map_->end()){
-  //     auto key_len = static_cast<uint8_t>(key.size());
-  //     string msg_head;
-  //     msg_head.push_back(key_len);
-  //     msg_head += key;
-  //     // we use low-level interface to avoid data copy
-  //     auto msg_len = key_len + data_size + 1;
-  //     zmq::message_t msg(msg_len);
-  //     memcpy(msg.data(), msg_head.c_str(), key_len + 1);
-  //     memcpy(static_cast<char*>(msg.data()) + key_len + 1, data_ptr, data_size);
-
-  //     auto send_stamp = std::chrono::duration_cast<std::chrono::microseconds>(
-  //         std::chrono::system_clock::now().time_since_epoch()).count();
-  //     for (auto &requestor_address : key_requestor_map_->at(key)){
-  //       pushers[requestor_address].send(msg);
-  //     }
-  //     key_requestor_map_->erase(key);
-  //     log_->info("Thread {} send data response for key {} at {}.", tid, key, send_stamp);
-  //   }
-  //   else{
-  //     log_->info("No requestor address when sending data response for key {}.", key);
-  //   }
-  // }
 
   vector<RecvMsg> try_recv_msg(map<Bucket, vector<TriggerPointer>> &bucket_triggers_map, map<string, AppInfo> &app_info_map, 
                       map<string, string> &func_app_map, map<string, string> &bucket_app_map){

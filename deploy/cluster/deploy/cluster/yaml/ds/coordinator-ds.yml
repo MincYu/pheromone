@@ -19,7 +19,7 @@ spec:
       hostIPC: true
       containers:
       - name: coordinator-container
-        image: cheneyyu/pheromone
+        image: tingjia/pheromone
         imagePullPolicy: Always
         env:
         - name: ROUTE_ADDR
@@ -27,7 +27,7 @@ spec:
         - name: MANAGEMENT
           value: MANAGEMENT_DUMMY
         - name: COORD_THREADS
-          value: "3"
+          value: "1"
         - name: IO_THREADS
           value: "1"
         - name: ROLE
