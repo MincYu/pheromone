@@ -55,12 +55,10 @@ message Argument {
   uint32 arg_flag = 2;
 
   string data_address = 3;
-
-  repeated int32 body_int = 4;
 }
 
 message ArgResp {
-  repeated int32 body = 1;
+  bytes body = 1;
 
   string key = 2;
 
