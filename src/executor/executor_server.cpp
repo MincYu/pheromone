@@ -89,19 +89,22 @@ void run(Address ip, unsigned thread_id) {
         update_status(thread_id, true);
 
         uint8_t arg_flag = str[1] - 1;
-        uint8_t resp_address_flag = str[2];
+        uint8_t persist_output_flag = str[2];
 
         string msg(str + 3);
         vector<string> func_with_args;
         split(msg, '|', func_with_args);
 
-        string resp_address = resp_address_flag == 1 ? emptyString : func_with_args[0];
-        if (resp_address_flag != 1) func_with_args.erase(func_with_args.begin());
+        string session_id = func_with_args[0];
+        func_with_args.erase(func_with_args.begin());
+        
         string func_name = func_with_args[0];
         // int func_id = stoi(func_with_args[1]);
+        // std::cout << "Received function call " << func_name << "\n" << std::flush;
 
         static_cast<UserLibrary*>(user_lib)->set_function_name(func_name);
-        static_cast<UserLibrary*>(user_lib)->set_resp_address(resp_address);
+        static_cast<UserLibrary*>(user_lib)->set_session_id(session_id);
+        static_cast<UserLibrary*>(user_lib)->set_persist_flag(persist_output_flag);
         if (name_func_map.find(func_name) == name_func_map.end()){
           // read .so from shared memory dir
           if(!load_function(log, func_name, name_func_map)){
@@ -139,7 +142,7 @@ void run(Address ip, unsigned thread_id) {
             arg_values = new char*[arg_size];
 
             for (int i = 1; i < func_with_args.size(); i+=3){
-              string key_name = func_with_args[i] + "|" + func_with_args[i + 1];
+              string key_name = func_with_args[i] + kDelimiter + func_with_args[i + 1];
               auto shm_obj_size = stoi(func_with_args[i + 2]);
               auto shm_id = ipc::shm::acquire(key_name.c_str(), shm_obj_size, ipc::shm::open);
               auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
@@ -173,7 +176,24 @@ void run(Address ip, unsigned thread_id) {
 
         log->info("Executing {} arg_size: {}. recv: {}, parse: {}", func_name, arg_size, recv_time, parse_time);
 
-        int exit_signal = name_func_map[func_name](user_lib, arg_size, arg_values);
+        int exit_signal = 1;
+
+        try{
+          exit_signal = name_func_map[func_name](user_lib, arg_size, arg_values);
+        }
+        catch (const std::overflow_error& e){
+          std::cerr << "Function " << func_name << " throws overflow error " << e.what() << std::endl;
+        }
+        catch (const std::runtime_error& e){
+          std::cerr << "Function " << func_name << " throws runtime error " << e.what() << std::endl;
+        }
+        catch (const std::exception& e){
+          std::cerr << "Function " << func_name << " throws exception " << e.what() << std::endl;
+        }
+        catch (...){
+          std::cerr << "Function " << func_name << " throws other type" << std::endl;
+        }
+
         if (exit_signal != 0){
           std::cerr << "Function " << func_name << " exits with error " << exit_signal << std::endl;
           log->warn("Function {} exits with error {}", func_name, exit_signal);
@@ -185,6 +205,7 @@ void run(Address ip, unsigned thread_id) {
 
         auto execute_time = std::chrono::duration_cast<std::chrono::microseconds>(execute_stamp.time_since_epoch()).count();
         log->info("Executed {} at: {}", func_name, execute_time);
+        // std::cout << "Executed function " << func_name << "\n" << std::flush;
 
       }
     }
@@ -206,6 +227,7 @@ int main(int argc, char *argv[]) {
         is_quit__.store(true, std::memory_order_release);
         shared_chan.disconnect();
         local_chan->disconnect();
+        std::cout << "Exit with env cleared\n" << std::flush;
     };
     ::signal(SIGINT  , exit);
     ::signal(SIGABRT , exit);

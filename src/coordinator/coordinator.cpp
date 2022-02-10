@@ -16,62 +16,26 @@ Address managementAddress;
 void update_address(
     const BucketKey &bucket_key,
     const Address &addr, 
-    map<Bucket, map<Key, set<Address>>> &normal_key_address_map,
-    map<Bucket, map<Session, map<Key, set<Address>>>> &session_key_address_map,
+    map<Bucket, map<Key, set<Address>>> &bucket_key_address_map,
     logger log) {
   // it should be identical, so we do not check overriding
-  if (bucket_key.vt_ == ValueType::NORMAL) {
-    normal_key_address_map[bucket_key.bucket_][bucket_key.key_].insert(addr);
-  }
-  else if (bucket_key.vt_ == ValueType::SESSION) {
-    session_key_address_map[bucket_key.bucket_][bucket_key.session_][bucket_key.key_].insert(addr);
-  }
-  else {
-    log->error("Update Address: BucketKey {} {} has no valid ValueType.", bucket_key.bucket_, bucket_key.key_);
-  }
+  bucket_key_address_map[bucket_key.bucket_][bucket_key.key_].insert(addr);
 }
 
 GetAddressResult get_address(
     const BucketKey &bucket_key,
-    map<Bucket, map<Key, set<Address>>> &normal_key_address_map,
-    map<Bucket, map<Session, map<Key, set<Address>>>> &session_key_address_map,
+    map<Bucket, map<Key, set<Address>>> &bucket_key_address_map,
     logger log) {
-  
   GetAddressResult result;
-  if (bucket_key.vt_ == ValueType::NORMAL) {
-    // we return the address if the bucket_key exists
-    if (normal_key_address_map.find(bucket_key.bucket_) != normal_key_address_map.end() && 
-        normal_key_address_map[bucket_key.bucket_].find(bucket_key.key_) != normal_key_address_map[bucket_key.bucket_].end()) {
-      result.error_ = KVSError::SUCCESS;
-      result.addr_ = normal_key_address_map[bucket_key.bucket_][bucket_key.key_];
-    }
-    else {
-      result.error_ = KVSError::KEY_NE;
-    }
-  }
-  else if (bucket_key.vt_ == ValueType::SESSION) {
-    // we first check if the session exists
-    if (session_key_address_map.find(bucket_key.bucket_) != session_key_address_map.end() && 
-        session_key_address_map[bucket_key.bucket_].find(bucket_key.session_) != session_key_address_map[bucket_key.bucket_].end()) {
-      // we then check if the session key exists
-      if (session_key_address_map[bucket_key.bucket_][bucket_key.session_].find(bucket_key.key_) 
-          != session_key_address_map[bucket_key.bucket_][bucket_key.session_].end()
-          && session_key_address_map[bucket_key.bucket_][bucket_key.session_][bucket_key.key_].size() > 0) {
-        result.error_ = KVSError::SUCCESS;
-        result.addr_ = session_key_address_map[bucket_key.bucket_][bucket_key.session_][bucket_key.key_];
-      }
-      else {
-        result.error_ = KVSError::KEY_NE;
-      }
-    }
-    else {
-      result.error_ = KVSError::SESSION_NE;
-    }
+  // we return the address if the bucket_key exists
+  if (bucket_key_address_map.find(bucket_key.bucket_) != bucket_key_address_map.end() && 
+      bucket_key_address_map[bucket_key.bucket_].find(bucket_key.key_) != bucket_key_address_map[bucket_key.bucket_].end()) {
+    result.error_ = KVSError::SUCCESS;
+    result.addr_ = bucket_key_address_map[bucket_key.bucket_][bucket_key.key_];
   }
   else {
-    log->error("Get Address: BucketKey {} {} has no valid ValueType.", bucket_key.bucket_, bucket_key.key_);
+    result.error_ = KVSError::KEY_NE;
   }
-
   return result;
 }
 
@@ -95,9 +59,7 @@ void run(Address public_ip, Address private_ip, unsigned thread_id) {
 
   SocketCache pushers(&context, ZMQ_PUSH);
 
-  map<Bucket, map<Key, set<Address>>> normal_key_address_map;
-  map<Bucket, map<Session, map<Key, set<Address>>>> session_key_address_map;
-  map<Bucket, ValueType> bucket_type_map;
+  map<Bucket, map<Key, set<Address>>> bucket_key_address_map;
   map<string, string> bucket_key_val_map;
   map<string, set<Address>> bucket_node_map;
 
@@ -181,7 +143,7 @@ void run(Address public_ip, Address private_ip, unsigned thread_id) {
     // handle put notifying request
     if (pollitems[0].revents & ZMQ_POLLIN) {
       string serialized = kZmqUtil->recv_string(&notify_handler_puller);
-      notify_handler(log, serialized, pushers, normal_key_address_map, session_key_address_map, bucket_type_map, bucket_triggers_map, 
+      notify_handler(log, serialized, pushers, bucket_key_address_map, bucket_triggers_map, 
                     bucket_app_map, bucket_key_val_map, bucket_node_map, node_status_map);
       notify_count++;
     }
@@ -189,20 +151,20 @@ void run(Address public_ip, Address private_ip, unsigned thread_id) {
     // handle key querying request
     if (pollitems[1].revents & ZMQ_POLLIN) {
       string serialized = kZmqUtil->recv_string(&query_handler_puller);
-      query_handler(log, serialized, pushers, normal_key_address_map, session_key_address_map, bucket_type_map);
+      query_handler(log, serialized, pushers, bucket_key_address_map);
       query_count++;
     }
 
     // handle bucket operation request
     if (pollitems[2].revents & ZMQ_POLLIN) {
       string serialized = kZmqUtil->recv_string(&bucket_op_handler_puller);
-      bucket_op_handler(log, serialized, pushers, bucket_type_map, bucket_triggers_map, app_buckets_map);
+      bucket_op_handler(log, serialized, pushers, bucket_triggers_map, app_buckets_map, bucket_app_map);
     }
 
     // handle trigger operation request
     if (pollitems[3].revents & ZMQ_POLLIN) {
       string serialized = kZmqUtil->recv_string(&trigger_op_handler_puller);
-      trigger_op_handler(log, serialized, private_ip, thread_id, pushers, bucket_type_map, bucket_triggers_map, node_status_map);
+      trigger_op_handler(log, serialized, private_ip, thread_id, pushers, bucket_triggers_map, bucket_app_map, node_status_map);
     }
 
     // handle status update from local scheduler
@@ -237,7 +199,7 @@ void run(Address public_ip, Address private_ip, unsigned thread_id) {
     // handle app registration request
     if (pollitems[6].revents & ZMQ_POLLIN) {
       string serialized = kZmqUtil->recv_string(&app_regist_socket);
-      app_register_handler(log, serialized, private_ip, thread_id, pushers, bucket_type_map, bucket_triggers_map, app_buckets_map, bucket_app_map, node_status_map);
+      app_register_handler(log, serialized, private_ip, thread_id, pushers, bucket_triggers_map, app_buckets_map, bucket_app_map, node_status_map);
     }
     
     // handle function call

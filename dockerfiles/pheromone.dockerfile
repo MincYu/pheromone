@@ -4,8 +4,10 @@ ENV PHERO_HOME /pheromone
 USER root
 
 WORKDIR /
+# under test
 # COPY . /pheromone
-RUN git clone https://github.com/MincYu/pheromone.git
+# use github repo in building
+RUN git clone -b dev https://github.com/MincYu/pheromone.git
 
 WORKDIR $PHERO_HOME
 RUN apt-get update

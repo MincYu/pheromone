@@ -23,14 +23,6 @@ enum KVSError {
 
 }
 
-enum ValueType { 
-  // No session
-  NORMAL = 0;
-
-  // Session-Aware
-  SESSION = 1;
-}
-
 // A protobuf to represent an individual key, both for requests and responses. 
 message BucketKeyTuple {
   // The key name for this request/response.
@@ -38,11 +30,9 @@ message BucketKeyTuple {
 
   string key = 2;
 
-  ValueType value_type = 3;
+  string session = 3;
 
-  string session = 4;
-
-  bytes payload = 5;
+  bytes payload = 4;
 
   // KVSError error = 6;
 
@@ -57,8 +47,6 @@ message BucketKeyTuple {
 
 
 message BucketKeyAddress {
-  ValueType value_type = 1;
-
   // The specified key.
   string bucket = 2;
   

@@ -19,6 +19,8 @@ def generate_timestamp(tid=1):
         p *= 10
     return int(t * p + tid)
 
+default_rerun_timeout = 3000
+
 class PheromoneClient():
     def __init__(self, mngt_ip, kvs_addr, ip, thread_id=0, context=None):
         if not context:
@@ -65,13 +67,12 @@ class PheromoneClient():
             lattice = LWWPairLattice(generate_timestamp(0), bytes(value, 'utf-8'))
         return self.kvs_client.put(key, lattice)
 
-    def create_bucket(self, app_name, bucket_name, value_type=NORMAL):
+    def create_bucket(self, app_name, bucket_name):
         coord_thread = self._try_get_app_coord(app_name)
         req = BucketOperationRequest()
         req = self._prepare_request(req, CREATE_BUCKET, self.ort.bucket_req_connect_address())
         
         req.bucket_name = bucket_name
-        req.bucket_type = value_type
         req.app_name = app_name
 
         self.pusher_cache.send(coord_thread.bucket_op_connect_address(), req)
@@ -103,7 +104,7 @@ class PheromoneClient():
             logging.error('Error {} in deleting bucket {}'.format(response.error, bucket_name))
             return False
 
-    def add_trigger(self, app_name, bucket_name, trigger_name, primitive_type, primitive, trigger_option=0):
+    def add_trigger(self, app_name, bucket_name, trigger_name, primitive_type, primitive, trigger_option=0, hints=None):
         coord_thread = self._try_get_app_coord(app_name)
 
         req = TriggerOperationRequest()
@@ -147,8 +148,25 @@ class PheromoneClient():
             prm = ByTimePrimitive()
             prm.function = primitive['function']
             prm.time_window = primitive['time_window']
-
+        
         req.primitive = prm.SerializeToString()
+
+        def parse_hints(req, hint):
+            h = req.hints.add()
+            h.source_function = hint[0]
+            if hint[1] is not None:
+                h.source_key = hint[1]
+            h.timeout = hint[2] if len(hint) > 2 else default_rerun_timeout
+
+        if hints is not None: 
+            if isinstance(hints, tuple):
+                parse_hints(req, hints)
+            elif isinstance(hints, list):
+                for hint in hints:
+                    parse_hints(req, hint)
+            else:
+                logging.error('Unregnized hints {}'.format(hints))
+                return False
         send_sock = self.pusher_cache.get(coord_thread.trigger_op_connect_address())
 
         send_request(req, send_sock)
@@ -212,12 +230,14 @@ class PheromoneClient():
                         return
         self.pusher_cache.send(coord_thread.app_regist_connect_address(), msg)
 
-    def call_app(self, app_name, func_args, synchronous=False):
+    def call_app(self, app_name, func_args, synchronous=False, timeout=5000, retry=0):
+        self.response_puller.setsockopt(zmq.RCVTIMEO, timeout)
         coord_thread = self._try_get_app_coord(app_name)
         call = FunctionCall()
         # call.name = name
         call.app_name = app_name
         call.request_id = self._get_request_id()
+        call.sync_data_status = False
         for func, args in func_args:
             func_req = call.requests.add()
             func_req.name = func
@@ -232,23 +252,29 @@ class PheromoneClient():
         self.pusher_cache.send(coord_thread.call_connect_address(), call)
 
         if synchronous:
-            try:
-                r = FunctionCallResponse()
-                r.ParseFromString(self.response_puller.recv())
-                recv_t = time.time()
-                print('Client timer. {}'.format(recv_t - send_t))
+            while (True):
+                try:
+                    r = FunctionCallResponse()
+                    r.ParseFromString(self.response_puller.recv())
+                    recv_t = time.time()
+                    print('Client timer. {}'.format(recv_t - send_t))
 
-                if r.error_no == 0:
-                    return r.output
-                else:
-                    logging.error('Error response no. {}'.format(r.error_no))
-                    return None
-            except zmq.ZMQError as e:
-                if e.errno == zmq.EAGAIN:
-                    logging.error('Request timed out')
-                    return None
-                else:
-                    raise e
+                    if r.error_no == 0:
+                        return r.output
+                    else:
+                        logging.error('Error response no. {}'.format(r.error_no))
+                        return None
+                except zmq.ZMQError as e:
+                    if e.errno == zmq.EAGAIN:
+                        if retry > 0:
+                            logging.error('Request timed out. retrying...')
+                            retry -= 1
+                            self.pusher_cache.send(coord_thread.call_connect_address(), call)
+                        else:
+                            logging.error('Request timed out.')
+                            return None
+                    else:
+                        raise e
 
     def _try_get_app_coord(self, app_name):
         if app_name not in self.app_coords:
@@ -260,7 +286,7 @@ class PheromoneClient():
             r = CoordResponse()
             r.ParseFromString(self.mngt_socket.recv())
             self.app_coords[app_name] = OperationThread(r.coord_ip, r.thread_id)
-            # print(f'Query from management. {r.coord_ip}, {r.thread_id}')
+            print(f'Query from management. {r.coord_ip}, {r.thread_id}')
         
         return self.app_coords[app_name]
 

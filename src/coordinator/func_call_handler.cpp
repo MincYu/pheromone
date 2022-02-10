@@ -21,12 +21,19 @@ void func_call_handler(logger log, string &serialized, SocketCache &pushers,
 
   string resp_address = call_msg.resp_address();
 
+  if (call_msg.session_id().empty()){
+    // a random session id in 16 bytes
+    string session_id = gen_random(seed, 16); 
+    call_msg.set_session_id(session_id);
+    call_msg.SerializeToString(&serialized);
+  }
+
   // string response_key = string();
   // if (!resp_address.empty()) {
   //   // synchronous requests
   //   response_key = call_msg.response_key();
   //   if (response_key.empty()){
-  //     response_key = gen_random(16); // a random id with 16 bytes
+  //     response_key = gen_random(seed, 16); // a random id with 16 bytes
   //     call_msg.set_response_key(response_key);
   //     call_msg.SerializeToString(&serialized);
   //   }
@@ -70,7 +77,7 @@ void func_call_handler(logger log, string &serialized, SocketCache &pushers,
         FunctionCall routed_call;
         routed_call.set_app_name(app_name);
         routed_call.set_resp_address(resp_address);
-        // routed_call.set_response_key(response_key);
+        routed_call.set_sync_data_status(true);
         int avail_node_index = 0;
         int cur_load = 0;
         for (auto &req : call_msg.requests()){

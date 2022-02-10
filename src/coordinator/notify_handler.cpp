@@ -13,9 +13,7 @@ std::hash<string> hasher;
  * handle the notifying request from KVS.
  */ 
 void notify_handler(logger log, string &serialized, SocketCache &pushers,
-                    map<Bucket, map<Key, set<Address>>> &normal_key_address_map,
-                    map<Bucket, map<Session, map<Key, set<Address>>>> &session_key_address_map,
-                    map<Bucket, ValueType> &bucket_type_map,
+                    map<Bucket, map<Key, set<Address>>> &bucket_key_address_map,
                     map<Bucket, vector<TriggerPointer>> &bucket_triggers_map,
                     map<Bucket, string> &bucket_app_map,
                     map<string, string> &bucket_key_val_map,
@@ -45,22 +43,14 @@ void notify_handler(logger log, string &serialized, SocketCache &pushers,
     string payload = address.payload();
     if (!payload.empty()){
       bucket_node_map[bucket_key.bucket_].insert(ip.substr(6, ip.find(":", 6) - 6));
-      update_address(bucket_key, ip, normal_key_address_map, session_key_address_map, log);
+      update_address(bucket_key, ip, bucket_key_address_map, log);
       bucket_key_val_map[bucket_key.shm_key_name()] = payload;
     }
     else{
       // it is reasonable to assume there is only a single address (i.e., request sender)
-      if (bucket_type_map.find(bucket_key.bucket_) != bucket_type_map.end()) {
-        if (bucket_type_map[bucket_key.bucket_] == bucket_key.vt_){
-          // key_addr_pair.push_back(std::make_pair(bucket_key, ip));
-          bucket_node_map[bucket_key.bucket_].insert(ip.substr(6, ip.find(":", 6) - 6));
-          update_address(bucket_key, ip, normal_key_address_map, session_key_address_map, log);
-        }
-        else{
-          kvs_error = KVSError::TYPE_NM;
-          log->info("Notifying handler error: Type error");
-          break;
-        }
+      if (bucket_app_map.find(bucket_key.bucket_) != bucket_app_map.end()) {
+        bucket_node_map[bucket_key.bucket_].insert(ip.substr(6, ip.find(":", 6) - 6));
+        update_address(bucket_key, ip, bucket_key_address_map, log);
       }
       // it means the bucket has not been created
       else {
@@ -89,13 +79,15 @@ void notify_handler(logger log, string &serialized, SocketCache &pushers,
           FunctionCall internalCall;
           internalCall.set_app_name(bucket_app_map[bucket_key.bucket_]);
           internalCall.set_resp_address(key_notif_request.response_address());
+          internalCall.set_sync_data_status(true);
+          internalCall.set_session_id(bucket_key.session_);
           auto req = internalCall.add_requests();
           req->set_name(action.function_);
 
           bool all_object = true;
           vector<string> val_to_batch;
           for (auto &session_key: action.session_keys_){
-            string key_name = bucket_key.bucket_ + "|" + session_key.second;
+            string key_name = get_local_object_name(bucket_key.bucket_, session_key.second, session_key.first);
             if (bucket_key_val_map.find(key_name) != bucket_key_val_map.end()){
               val_to_batch.push_back(bucket_key_val_map[key_name]);
             }
@@ -123,7 +115,8 @@ void notify_handler(logger log, string &serialized, SocketCache &pushers,
           else {
             for (auto &session_key: action.session_keys_){
               Argument* arg = req->add_arguments();
-              string key_name = bucket_key.bucket_ + "|" + session_key.second;
+              string key_name = get_local_object_name(bucket_key.bucket_, session_key.second, session_key.first);
+
               // if (bucket_key_val_map.find(key_name) != bucket_key_val_map.end()){
               //   arg->set_body(bucket_key_val_map[key_name]);
               //   arg->set_arg_flag(0);
@@ -132,7 +125,7 @@ void notify_handler(logger log, string &serialized, SocketCache &pushers,
               arg->set_body(key_name);
               arg->set_arg_flag(arg_flag);
               // TODO session support
-              string data_address = *(normal_key_address_map[bucket_key.bucket_][session_key.second].begin());
+              string data_address = *(bucket_key_address_map[bucket_key.bucket_][session_key.second].begin());
               arg->set_data_address(data_address);
               string ip = data_address.substr(6, data_address.find(":", 6) - 6);
               data_node.insert(ip);
@@ -210,6 +203,7 @@ void notify_handler(logger log, string &serialized, SocketCache &pushers,
         TriggerEntity *entity = coord_msg.add_triggers();
         entity->set_bucket_name(bucket_key.bucket_);
         entity->set_trigger_name(name);
+        entity->set_session(bucket_key.session_);
       }
       
       string msg_serialized;

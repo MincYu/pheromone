@@ -83,10 +83,10 @@ class MR:
         app_name = map_func_name + '_' + reduce_func_name
         self.client.register_app(app_name, [map_func_name, reduce_func_name], [])
         bucket_name = f'b_{app_name}'
-        res = self.client.create_bucket(app_name, bucket_name, NORMAL)
+        res = self.client.create_bucket(app_name, bucket_name)
         if not res:
             self.client.delete_bucket(app_name, bucket_name)
-            res = self.client.create_bucket(app_name, bucket_name, NORMAL)
+            res = self.client.create_bucket(app_name, bucket_name)
         
         if res:
             res = self.client.add_trigger(app_name, bucket_name, f't_{app_name}', DYNAMIC_GROUP, {'function': reduce_func_name, 'control_group': [ f'ctrl:{i}' for i in range(len(map_inputs))]}, trigger_option=1)
