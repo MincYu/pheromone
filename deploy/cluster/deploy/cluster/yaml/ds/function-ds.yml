@@ -223,7 +223,7 @@ spec:
         - name: IO_THREADS
           value: "2"
         - name: EXECUTOR_NUM
-          value: "11"
+          value: "12"
         - name: DELAY
           value: "0"
         - name: SHARED

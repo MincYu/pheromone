@@ -48,7 +48,7 @@ struct RerunCheckQueueItem {
   TriggerPointer trigger_ptr_;
 };
 
-auto rerun_check_queue_compare = [](RerunCheckQueueItem first, RerunCheckQueueItem second) {return first.check_time_ < second.check_time_;};
+auto rerun_check_queue_compare = [](RerunCheckQueueItem first, RerunCheckQueueItem second) {return first.check_time_ > second.check_time_;};
 using RerunCheckQueue = std::priority_queue<RerunCheckQueueItem, vector<RerunCheckQueueItem>, decltype(rerun_check_queue_compare)>;
 
 RerunCheckQueue rerun_check_queue(rerun_check_queue_compare);
@@ -170,6 +170,7 @@ void schedule_func_call(logger log, CommHelperInterface *helper, map<uint8_t, ui
     auto sched_time = std::chrono::system_clock::now();
     auto sched_stamp = std::chrono::duration_cast<std::chrono::microseconds>(sched_time.time_since_epoch()).count();
 
+    // std::cout << "Schedule function " << func_name << " to executor " << executor_id << "\n" << std::flush;
     log->info("Schedule function {} with arg_flag {} to executor {}. sched_time: {}", func_name, arg_flag, executor_id, sched_stamp);
     send_to_executer(executor_chans_map[executor_id], resp);
     executor_status_map[executor_id] = 2;
@@ -295,6 +296,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
       // executor address (1 byte) | requst type (1 byte) | request id (1 byte) | metadata len (1 byte)| metadata | optional value
       auto executor_address = str[0];
       uint8_t executor_id = static_cast<uint8_t>(executor_address - 1);
+
 
       // get request
       if (str[1] == 1){
@@ -676,6 +678,7 @@ int main(int argc, char *argv[]) {
         for(auto &chan_pair : executor_chans_map) {
             chan_pair.second->disconnect();
         }
+        std::cout << "Exit with env cleared\n" << std::flush;
     };
     ::signal(SIGINT  , exit);
     ::signal(SIGABRT , exit);

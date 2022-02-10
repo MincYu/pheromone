@@ -156,7 +156,7 @@ class PheromoneClient():
             h.source_function = hint[0]
             if hint[1] is not None:
                 h.source_key = hint[1]
-            h.timeout = hint[2] if len(hint) > 3 else default_rerun_timeout
+            h.timeout = hint[2] if len(hint) > 2 else default_rerun_timeout
 
         if hints is not None: 
             if isinstance(hints, tuple):
@@ -230,7 +230,8 @@ class PheromoneClient():
                         return
         self.pusher_cache.send(coord_thread.app_regist_connect_address(), msg)
 
-    def call_app(self, app_name, func_args, synchronous=False):
+    def call_app(self, app_name, func_args, synchronous=False, timeout=5000, retry=0):
+        self.response_puller.setsockopt(zmq.RCVTIMEO, timeout)
         coord_thread = self._try_get_app_coord(app_name)
         call = FunctionCall()
         # call.name = name
@@ -251,23 +252,29 @@ class PheromoneClient():
         self.pusher_cache.send(coord_thread.call_connect_address(), call)
 
         if synchronous:
-            try:
-                r = FunctionCallResponse()
-                r.ParseFromString(self.response_puller.recv())
-                recv_t = time.time()
-                print('Client timer. {}'.format(recv_t - send_t))
+            while (True):
+                try:
+                    r = FunctionCallResponse()
+                    r.ParseFromString(self.response_puller.recv())
+                    recv_t = time.time()
+                    print('Client timer. {}'.format(recv_t - send_t))
 
-                if r.error_no == 0:
-                    return r.output
-                else:
-                    logging.error('Error response no. {}'.format(r.error_no))
-                    return None
-            except zmq.ZMQError as e:
-                if e.errno == zmq.EAGAIN:
-                    logging.error('Request timed out')
-                    return None
-                else:
-                    raise e
+                    if r.error_no == 0:
+                        return r.output
+                    else:
+                        logging.error('Error response no. {}'.format(r.error_no))
+                        return None
+                except zmq.ZMQError as e:
+                    if e.errno == zmq.EAGAIN:
+                        if retry > 0:
+                            logging.error('Request timed out. retrying...')
+                            retry -= 1
+                            self.pusher_cache.send(coord_thread.call_connect_address(), call)
+                        else:
+                            logging.error('Request timed out.')
+                            return None
+                    else:
+                        raise e
 
     def _try_get_app_coord(self, app_name):
         if app_name not in self.app_coords:
