@@ -129,14 +129,14 @@ class UserLibrary : public UserLibraryInterface {
       }
     }
 
-    void send_object(EpheObject *data, bool output = false) {
+    void send_object(EpheObject *data, bool output = false, bool to_anna = false) {
       string req;
       auto req_id = get_request_id();
       req.push_back(chan_id_);
 
       bool wait_res = false;
       if (output) {
-        if (resp_address_.empty()) {
+        if (to_anna) {
           // write to remote data store
           req.push_back(3);
           wait_res = true;

@@ -17,7 +17,7 @@ class UserLibraryInterface {
     virtual EpheObject* create_object(string target_function, bool many_to_one_trigger = true, size_t size = 1024 * 1024) = 0;
     virtual EpheObject* create_object(string bucket, string key, size_t size = 1024 * 1024) = 0;
     
-    virtual void send_object(EpheObject *data, bool output = false) = 0;
+    virtual void send_object(EpheObject *data, bool output = false, bool to_anna = false) = 0;
     virtual EpheObject* get_object(string bucket, string key, bool from_ephe_store=true) = 0;
 
     virtual string gen_unique_key() = 0;

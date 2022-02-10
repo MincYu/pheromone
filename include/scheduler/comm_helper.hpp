@@ -370,20 +370,7 @@ class CommHelper : public CommHelperInterface {
       else {
         for (auto &func_arg: func_args){
           auto arg = req->add_arguments();
-          // change the argument string to an int array: func_arg -> int array
-          string obj_body(func_arg);
-          auto start = 1U;
-          auto end = obj_body.find(',');
-          while (end != std::string::npos)
-          {
-              string tmp = obj_body.substr(start, end - start);
-              int item = stoi(tmp);
-              arg->add_body_int(item);
-              start = end + 1;
-              end = obj_body.find(',', start);
-          }
-
-          arg->set_body("");
+          arg->set_body(func_arg);
           arg->set_arg_flag(arg_flag);
         }
       }
@@ -576,20 +563,11 @@ class CommHelper : public CommHelperInterface {
         vector<string> args;
         int arg_flag = 0;
         for (auto &arg : req.arguments()){
+          args.push_back(arg.body());
           if (arg.arg_flag() > 0) {
             arg_flag = arg.arg_flag();
             key_address_cache_->emplace(arg.body(), arg.data_address());
-            args.push_back(arg.body());
-          } else {
-            // serialization the repeated int to a string before adding to resp
-            string body_int = "[";
-            for (auto &item : arg.body_int()) {
-              body_int += std::to_string(item);
-              body_int += ",";
-            }
-            body_int += "]";
-            args.push_back(body_int);
-          }
+          } 
         }
         resp.is_func_arg_keys_.push_back(arg_flag);
         resp.func_args_.push_back(args);
@@ -630,17 +608,9 @@ class CommHelper : public CommHelperInterface {
         ArgResp data_resp;
         data_resp.set_key(key);
         data_resp.set_keylen(static_cast<int>(key_len));
-        string obj_body(data_info_pair.first);
-        auto start = 1U;
-        auto end = obj_body.find(',');
-        while (end != std::string::npos)
-        {
-            string tmp = obj_body.substr(start, end - start);
-            int item = stoi(tmp);
-            data_resp.add_body(item);
-            start = end + 1;
-            end = obj_body.find(',', start);
-        }
+        string obj_body(data_info_pair.first, data_info_pair.second);
+        data_resp.set_body(obj_body);
+        
         auto send_stamp = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         send_request(data_resp,  socket_cache_[resp_address]);
@@ -660,7 +630,6 @@ class CommHelper : public CommHelperInterface {
     if (zmq_pollitems_[3].revents & ZMQ_POLLIN) {
       auto data_resp_stamp = std::chrono::duration_cast<std::chrono::microseconds>(
           std::chrono::system_clock::now().time_since_epoch()).count();
-      // serialize repeated int to string when receiving data
       RecvMsg resp;
 
       string serialized = kZmqUtil->recv_string(&data_access_client_puller_);
@@ -674,15 +643,9 @@ class CommHelper : public CommHelperInterface {
           std::chrono::system_clock::now().time_since_epoch()).count();
 
       resp.data_key_ = key;
-      string body_int = "[";
-      for (auto &item : data_receive.body()) {
-        body_int += std::to_string(item);
-        body_int += ",";
-      }
-      body_int += "]";
-
-      resp.data_size_ = body_int.length();
-      copy_func_(key, body_int.c_str(), resp.data_size_);
+      string body{data_receive.body()};
+      resp.data_size_ = body.length();
+      copy_func_(key, body.c_str(), resp.data_size_);
       comm_resps.push_back(resp);
 
       auto data_copy_stamp = std::chrono::duration_cast<std::chrono::microseconds>(
