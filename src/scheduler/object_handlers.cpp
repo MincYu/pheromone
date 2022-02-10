@@ -60,3 +60,8 @@ void check_object_arrival(logger log, BucketKey &bucket_key, map<Bucket,
     }
   }
 }
+
+map<string, uint8_t> data_clear_state_map; // state 0: created; 1: be using; 2: ready to clear
+inline void release_shm_object() {
+  // TODO clear the shared memory
+}

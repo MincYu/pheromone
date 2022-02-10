@@ -79,11 +79,6 @@ inline void send_to_executer(shm_chan_t* chan_ptr, string msg){
   }
 }
 
-map<string, uint8_t> data_clear_state_map; // state 0: created; 1: be using; 2: ready to clear
-inline void release_shm_object() {
-  // TODO clear the shared memory
-}
-
 void forward_call_via_helper(CommHelperInterface *helper, string &session_id, string &app_name, vector<string> &func_name_vec, 
                             vector<vector<string>> &func_args_vec, int arg_flag){
   // send request to global coordinator
