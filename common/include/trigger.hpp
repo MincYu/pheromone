@@ -442,7 +442,7 @@ class DynamicJoinTrigger : public Trigger {
           for (auto &key : parallel_keys_[bucket_key.session_]){
             actions.push_back({parallel_func_name_, {std::make_pair(bucket_key.session_, key)}});
           }
-          stages_[bucket_key.session_] = 1
+          stages_[bucket_key.session_] = 1;
         }
         else {
           parallel_keys_[bucket_key.session_].insert(bucket_key.key_);
