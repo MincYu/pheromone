@@ -148,7 +148,11 @@ class PheromoneClient():
             prm = ByTimePrimitive()
             prm.function = primitive['function']
             prm.time_window = primitive['time_window']
-        
+        elif primitive_type == DYNAMIC_JOIN:
+            prm = DynamicJoinPrimitive()
+            prm.function = primitive['function']
+            prm.parallel_func_name = primitive['parallel_func']
+
         req.primitive = prm.SerializeToString()
 
         def parse_hints(req, hint):

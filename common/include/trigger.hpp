@@ -425,6 +425,67 @@ class ByTimeTrigger : public Trigger {
     TimePoint last_trigger_stamp_;
 };
 
+class DynamicJoinTrigger : public Trigger {
+  public:
+    DynamicJoinTrigger(const string &function_name, const string &trigger_name, const string &parallel_func_name): 
+      Trigger(function_name, trigger_name, PrimitiveType::DYNAMIC_JOIN), parallel_func_name_(parallel_func_name) {}
+
+    vector<TriggerAction> action_for_new_object(const BucketKey &bucket_key) {
+      vector<TriggerAction> actions;
+
+      if (stages_.find(bucket_key.session_) ==  stages_.end()){
+        stages_[bucket_key.session_] = 0;
+      }
+
+      if (stages_[bucket_key.session_] == 0){
+        if (bucket_key.key_ == control_group_prefix) {
+          for (auto &key : parallel_keys_[bucket_key.session_]){
+            actions.push_back({parallel_func_name_, {std::make_pair(bucket_key.session_, key)}});
+          }
+          stages_[bucket_key.session_] = 1
+        }
+        else {
+          parallel_keys_[bucket_key.session_].insert(bucket_key.key_);
+        }
+      }
+      else if (stages_[bucket_key.session_] == 1) {
+        join_keys_[bucket_key.session_].insert(bucket_key.key_);
+        if (join_keys_[bucket_key.session_].size() == parallel_keys_[bucket_key.session_].size()) {
+          vector<pair<Session, Key>> session_keys;
+          for (auto &key : join_keys_[bucket_key.session_]){
+            session_keys.push_back(std::make_pair(bucket_key.session_, key));
+          }
+          actions.push_back({target_function_, session_keys});
+          clear(bucket_key.session_);
+        }
+      }
+
+      return actions;
+    }
+
+    string dump_pritimive(){
+      DynamicJoinPrimitive primitive;
+      primitive.set_function(target_function_);
+      primitive.set_parallel_func_name(parallel_func_name_);
+
+      string prm_serialized;
+      primitive.SerializeToString(&prm_serialized);
+      return prm_serialized;
+    }
+
+    void clear(const string &session) {
+      parallel_keys_.erase(session);
+      join_keys_.erase(session);
+      stages_.erase(session);
+    }
+
+  private:
+    string parallel_func_name_;
+    map<Session, set<Key>> parallel_keys_;
+    map<Session, set<Key>> join_keys_;
+    map<Session, uint8_t> stages_;
+};
+
 /**
 Generate trigger pointer from serialized data
 */
@@ -472,6 +533,12 @@ inline TriggerPointer gen_trigger_pointer(PrimitiveType type, string &trigger_na
     primitive.ParseFromString(serialized);
     unsigned time_window = primitive.time_window();
     return std::make_shared<ByTimeTrigger>(primitive.function(), trigger_name, time_window);
+  } 
+  else if (type == PrimitiveType::DYNAMIC_JOIN) {
+    DynamicJoinPrimitive primitive;
+    primitive.ParseFromString(serialized);
+    string parallel_func = primitive.parallel_func_name();
+    return std::make_shared<DynamicJoinTrigger>(primitive.function(), trigger_name, parallel_func);
   } 
   else {
     return nullptr;

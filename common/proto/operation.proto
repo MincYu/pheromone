@@ -157,6 +157,7 @@ enum PrimitiveType {
   DYNAMIC_GROUP = 4;
   REDUNDANT = 5;
   BY_TIME = 6;
+  DYNAMIC_JOIN = 7;
 }
 
 message BucketOperationRequest {
@@ -270,6 +271,13 @@ message ByTimePrimitive {
   string function = 1;
 
   uint32 time_window = 2;
+}
+
+message DynamicJoinPrimitive {
+  // The function to trigger, can be name, http endpoint, etc. 
+  string function = 1;
+
+  string parallel_func_name = 2;
 }
 
 
