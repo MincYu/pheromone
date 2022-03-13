@@ -44,14 +44,32 @@ class Trigger {
 
     virtual ~Trigger() = default;
 
+    /**
+     * Check whether to trigger functions when a new object in the  
+     * bucket is ready. It takes as input the metadata of the object, 
+     * i.e., BucketKey, and returns a collection of functions to 
+     * trigger, i.e., TriggerAction, which will then be converted into
+     * actual function requests.
+     */
     virtual vector<TriggerAction> action_for_new_object(const BucketKey &bucket_key) = 0;
-    virtual string dump_pritimive() = 0;
-    virtual void clear(const string &session) = 0;
 
+    /**
+     * Notify this trigger of the start of its source functions for 
+     * function re-execution in case of failures. It includes the function,
+     * session, and the arguments, which can be either BucketKey or actual data.
+     */
     virtual void notify_source_func(string &func_name, string &session_id, vector<string> &func_args, int arg_flag) {};
+    /**
+     * Check if there is a need to re-execute its source functions. It is called
+     * after a configurable time period since the start of functions. 
+     * It returns a collection of functions to re-execute, if needed.
+     */
     virtual vector<TriggerFunctionMetadata> action_for_rerun(string &session_id) { return {}; };
+
+    virtual void clear(const string &session) = 0;
     virtual void set_rerun_metadata(vector<RerunMetadata> &rerun_metadata) {};
 
+    virtual string dump_pritimive() = 0;
     string get_trigger_name(){ return trigger_name_;}
     PrimitiveType get_type(){ return type_;}
     void set_trigger_option(int option) {trigger_option_ = option;}
@@ -394,9 +412,10 @@ class ByTimeTrigger : public Trigger {
 
     vector<TriggerAction> action_for_new_object(const BucketKey &bucket_key) {
       buffer_.push_back(std::make_pair(bucket_key.session_, bucket_key.key_));
+      // clear the session status cache
+      session_status_cache_.erase(bucket_key.session_);
 
       // In most cases, the streaming data come with high frequency, thus we just check the timestamp upon data arrival
-      // Consider periodically trigger in future 
       vector<TriggerAction> actions;
       auto cur_stamp = std::chrono::system_clock::now();
       if (std::chrono::duration_cast<std::chrono::milliseconds>(cur_stamp - last_trigger_stamp_).count() >= time_window_){
@@ -405,6 +424,17 @@ class ByTimeTrigger : public Trigger {
         buffer_.clear();
       }
       return actions;
+    }
+
+    void notify_source_func(string &func_name, string &session_id, vector<string> &func_args, int arg_flag) {
+      session_status_cache_[session_id] = {func_name, func_args, arg_flag};
+    }
+
+    vector<TriggerFunctionMetadata> action_for_rerun(string &session_id) {
+      if (session_status_cache_.find(session_id) != session_status_cache_.end()){
+        return {session_status_cache_[session_id]};
+      }
+      return {};
     }
 
     string dump_pritimive(){
@@ -417,12 +447,16 @@ class ByTimeTrigger : public Trigger {
       return prm_serialized;
     }
 
-    void clear(const string &session) {buffer_.clear();}
+    void clear(const string &session) {
+      buffer_.clear();
+      session_status_cache_.clear();
+    }
 
   private:
     unsigned time_window_;
     vector<pair<Session, Key>> buffer_;
     TimePoint last_trigger_stamp_;
+    map<string, TriggerFunctionMetadata> session_status_cache_;
 };
 
 class DynamicJoinTrigger : public Trigger {
