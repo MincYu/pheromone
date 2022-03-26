@@ -21,6 +21,7 @@ pair<char*, unsigned> get_shm_obj(string &key_name){
   }
 } 
 
+// 检查是否需要trigger下一个阶段的function
 void check_object_arrival(logger log, BucketKey &bucket_key, map<Bucket, 
                           vector<TriggerPointer>> &bucket_triggers_map, vector<string> &active_triggers, 
                           vector<TriggerFunctionMetadata> &active_func_metadata){
@@ -61,7 +62,13 @@ void check_object_arrival(logger log, BucketKey &bucket_key, map<Bucket,
   }
 }
 
-map<string, uint8_t> data_clear_state_map; // state 0: created; 1: be using; 2: ready to clear
+// input a key or a list of shared objects and remove them according to the status
+extern set<string> data_ready_to_clear;
 inline void release_shm_object() {
-  // TODO clear the shared memory
+  // remove shared memory captured in cache
+  for (string obj_name : data_ready_to_clear) {
+    ipc::shm::remove(obj_name.c_str());
+  }
+  // clear the cache
+  data_ready_to_clear.clear()
 }

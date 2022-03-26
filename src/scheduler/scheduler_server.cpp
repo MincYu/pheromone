@@ -41,6 +41,7 @@ queue<DelayFunctionCall> delay_call_queue;
 map<string, unsigned> key_len_map;
 map<string, string> key_val_map;
 map<string, string> session_client_addr_map;
+set<string> data_ready_to_clear;
 
 struct RerunCheckQueueItem {
   TimePoint check_time_; // checking timestamp in ms
@@ -257,6 +258,9 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
   set<string> function_cache;
   map<string, uint32_t> function_len_map;
   map<string, set<uint8_t>> function_executor_map;
+
+  // terminated session_id send to coordinator
+  set<string> session_id_list;
   
   map<uint8_t, uint8_t> executor_status_map;
   for (uint8_t e_id = 0; e_id < executor; e_id++){
@@ -351,7 +355,9 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
         }
         else{
           // unpacking infos
+          // Session Id
           string& session_id = infos[0], src_function = infos[1], tgt_function = infos[2], bucket = infos[3], session_key = infos[4];
+          // bucket + session + key
           string obj_name = bucket + kDelimiter + session_key;
 
           // ephemeral data
@@ -453,7 +459,20 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
             }
 
             helper->client_response(session_client_addr_map[session_id], func_app_map[src_function], output_data);
-            // TODO remove output data
+            // insert session id and oending to be sent to coordinator
+            session_id_list.insert(session_id)
+            data_ready_to_clear.insert(obj_name);
+            // Search for intermediate data via obj_name[len-16:len]
+            for (auto iter = key_len_map.begin(); iter !=  key_len_map.end(); ++iter) {
+              obj_key = iter->first
+              if (obj_key.substr(obj_key.size() - session_id.size()) == session_id) {
+                mp.erase(iter);
+                data_ready_to_clear.insert(obj_key)
+                if (key_val_map.find(obj_key) != key_val_map.end()) {
+                  key_val_map.earse(obj_key)
+                }
+              }
+            }
           }
         }
       }
@@ -657,7 +676,11 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
         rerun_check_queue.pop();
       }
 
+      // remove object no longer needed
+      release_shm_object();
+
       // TODO update function locations
+      // TODO send session_id list to package the finished requests
       helper->update_status(get_avail_executor_num(executor_status_map), function_cache);
 
       report_start = std::chrono::system_clock::now();
