@@ -70,5 +70,5 @@ inline void release_shm_object() {
     ipc::shm::remove(obj_name.c_str());
   }
   // clear the cache
-  data_ready_to_clear.clear()
+  data_ready_to_clear.clear();
 }

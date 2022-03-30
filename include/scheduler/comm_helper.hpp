@@ -100,7 +100,7 @@ class CommHelperInterface {
   virtual void notify_put(const BucketKey& bucket_key, vector<string> &active_triggers, const string& resp_address, const string& payload=emptyString) = 0;
   
   virtual void set_logger(logger log) = 0;
-  virtual void update_status(int avail_executors, set<string> &function_cache) = 0;
+  virtual void update_status(int avail_executors, set<string> &function_cache, set<string> &session_cache) = 0;
   virtual vector<RecvMsg> try_recv_msg(map<Bucket, vector<TriggerPointer>> &bucket_triggers_map, map<string, AppInfo> &app_info_map, 
                               map<string, string> &func_app_map, map<string, string> &bucket_app_map, map<string, vector<RerunTriggerTimeout>> &func_trigger_timeout_map) = 0;
   virtual void forward_func_call(string &resp_address, string &app_name, vector<string> &func_name_vec, vector<vector<string>> &func_args_vec, int arg_flag, string &session_id) = 0;
@@ -115,7 +115,7 @@ class CommHelperInterface {
 
 class CommHelper : public CommHelperInterface {
  public:
-  CommHelper(vector<HandlerThread> routing_threads, string ip, CopyFunction copy_func, GetFunction get_func, unsigned io_thread_count = 1, unsigned timeout = 10000):
+  CommHelper(vector<HandlerThread> routing_threads, string ip, CopyFunction copy_func = " \t\n\r", GetFunction get_func = " \t\n\r", unsigned io_thread_count = 1, unsigned timeout = 10000):
       routing_threads_(routing_threads),
       ip_(ip),
       ut_(ip, 0),
@@ -387,14 +387,17 @@ class CommHelper : public CommHelperInterface {
     send_request(client_resp, socket_cache_[resp_address]);
   }
 
-  void update_status(int avail_executors, set<string> &function_cache) {
+  // TODO: Add session_id into proto
+  void update_status(int avail_executors, set<string> &function_cache, set<string> &session_cache) {
     UpdateStatusMessage msg;
     msg.set_ip(ip_);
     msg.set_avail_executors(avail_executors);
-    for (auto &function : function_cache){
+    for (auto &function : function_cache) {
       msg.add_functions(function);
     }
-
+    for (auto &session_id : session_cache) {
+      msg.add_sessions(session_id);
+    }
     string serialized;
     msg.SerializeToString(&serialized);
 
@@ -403,6 +406,19 @@ class CommHelper : public CommHelperInterface {
     for (auto &ht : routing_threads_){
       // send_no_block_msg(&socket_cache_[ht.update_handler_connect_address()], serialized);
       kZmqUtil->send_string(serialized, &socket_cache_[ht.update_handler_connect_address()]);
+    }
+  }
+
+  void notice_remove_obj(set<string> &session_cache) {
+    NoticeRemoveObjMessage msg;
+    msg.set_ip(ip_);
+    for (auto &session+id : session_cache) {
+      msg.add_sessions();
+    }
+    string serialized;
+    msg.SerializeToString(&serialized)
+    for (auto &ht : routing_threads_) {
+      kZmqUtil->send_string(serialized, &socket_cache_[ht.notify_handler_bind_address()]);
     }
   }
 

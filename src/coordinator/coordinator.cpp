@@ -69,6 +69,9 @@ void run(Address public_ip, Address private_ip, unsigned thread_id) {
 
   map<Address, NodeStatus> node_status_map;
 
+  set<string> terminated_session_cache;
+
+  // listening port
   zmq::socket_t notify_handler_puller(context, ZMQ_PULL);
   notify_handler_puller.bind(ht.notify_handler_bind_address());
   std::cout << "Notifying handler binded" << std::endl;
@@ -179,6 +182,9 @@ void run(Address public_ip, Address private_ip, unsigned thread_id) {
       for (const auto &func : msg.functions()){
         functions.insert(func);
       }
+      for (const auto &session_id : msg.sessions()) {
+        terminated_session_cache.insert(session_id);
+      }
       if (node_status_map.find(ip) != node_status_map.end()){
         node_status_map[ip].update_status(avail_executors, functions);
       }
@@ -221,8 +227,20 @@ void run(Address public_ip, Address private_ip, unsigned thread_id) {
     if (duration >= CoordReportThreshold) {
       report_start = std::chrono::system_clock::now();
       // TODO remote out-of-data node status
+      // TODO: broadcast terminated session id to schedulers 
+      // add handler thread of schedulers
+      for (auto iter = node_status_map.begin(); iter !=  node_status_map.end(); ++iter) {
+        Address addr = iter->first;
+        // Maybe configure in configuration file instead later
+        int schedularThreadCount = 1;
+        for (unsigned i = 0; i < schedularThreadCount; i++) {
+          threads.push_back(HandlerThread(addr, i));
+        }
+      }
       log->info("Coordinator report. notify_count: {}, query_count: {}, call_count: {}", notify_count, query_count, call_count);
-
+      CommHelper helper(threads, public_ip);
+      helper->notice_remove_obj(&terminated_session_cache);
+      terminated_session_cache.clear();
     }
 
   }
@@ -252,6 +270,5 @@ int main(int argc, char *argv[]) {
   for (unsigned thread_id = 1; thread_id < threads; thread_id++) {
     coord_worker_threads.push_back(std::thread(run, public_ip, private_ip, thread_id));
   }
-  
   run(public_ip, private_ip, 0);
 }

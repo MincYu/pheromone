@@ -287,6 +287,14 @@ message UpdateStatusMessage {
   uint32 avail_executors = 2;
 
   repeated string functions = 3;
+
+  repeated string sessions = 4;
+}
+
+message NoticeRemoveObjMessage {
+  string ip = 1;
+
+  repeated string sessions = 2;
 }
 
 message TriggerEntity {
