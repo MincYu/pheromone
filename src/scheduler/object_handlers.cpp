@@ -69,6 +69,4 @@ inline void release_shm_object() {
   for (string obj_name : data_ready_to_clear) {
     ipc::shm::remove(obj_name.c_str());
   }
-  // clear the cache
-  data_ready_to_clear.clear();
 }

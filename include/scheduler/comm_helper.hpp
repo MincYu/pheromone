@@ -115,7 +115,7 @@ class CommHelperInterface {
 
 class CommHelper : public CommHelperInterface {
  public:
-  CommHelper(vector<HandlerThread> routing_threads, string ip, CopyFunction copy_func = " \t\n\r", GetFunction get_func = " \t\n\r", unsigned io_thread_count = 1, unsigned timeout = 10000):
+  CommHelper(vector<HandlerThread> routing_threads, string ip, CopyFunction copy_func, GetFunction get_func, unsigned io_thread_count = 1, unsigned timeout = 10000):
       routing_threads_(routing_threads),
       ip_(ip),
       ut_(ip, 0),
@@ -409,18 +409,18 @@ class CommHelper : public CommHelperInterface {
     }
   }
 
-  void notice_remove_obj(set<string> &session_cache) {
-    NoticeRemoveObjMessage msg;
-    msg.set_ip(ip_);
-    for (auto &session+id : session_cache) {
-      msg.add_sessions();
-    }
-    string serialized;
-    msg.SerializeToString(&serialized)
-    for (auto &ht : routing_threads_) {
-      kZmqUtil->send_string(serialized, &socket_cache_[ht.notify_handler_bind_address()]);
-    }
-  }
+  // void notice_remove_obj(set<string> &session_cache) {
+  //   NoticeRemoveObjMessage msg;
+  //   msg.set_ip(ip_);
+  //   for (auto &session_id : session_cache) {
+  //     msg.add_sessions();
+  //   }
+  //   string serialized;
+  //   msg.SerializeToString(&serialized)
+  //   for (auto &ht : routing_threads_) {
+  //     kZmqUtil->send_string(serialized, &socket_cache_[ht.notify_handler_bind_address()]);
+  //   }
+  // }
 
   void forward_func_call(string &resp_address, string &app_name, vector<string> &func_name_vec, vector<vector<string>> &func_args_vec, int arg_flag, string &session_id) {
     FunctionCall forwardCall;
