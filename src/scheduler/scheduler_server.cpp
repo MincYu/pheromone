@@ -278,15 +278,6 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
   
   map<Bucket, vector<TriggerPointer>> bucket_triggers_map;
 
-  // listening port
-  zmq::socket_t notify_handler_puller(context, ZMQ_PULL);
-  notify_handler_puller.bind(ht.notify_handler_bind_address());
-  std::cout << "Notifying handler binded" << std::endl;
-
-  vector<zmq::pollitem_t> pollitems = {
-    {static_cast<void *>(notify_handler_puller), 0, ZMQ_POLLIN, 0},
-  };
-
   std::cout << "Running kvs server...\n";
   log->info("Running kvs server");
 
@@ -682,10 +673,10 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
       release_shm_object();
       for (string obj_key : data_ready_to_clear) {
         if (key_len_map.find(obj_key) != key_len_map.end()) {
-          key_len_map.earse(obj_key);
+          key_len_map.erase(obj_key);
         }
         if (key_val_map.find(obj_key) != key_val_map.end()) {
-          key_val_map.earse(obj_key);
+          key_val_map.erase(obj_key);
         }
       }
       data_ready_to_clear.clear();

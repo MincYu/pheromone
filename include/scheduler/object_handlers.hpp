@@ -24,7 +24,7 @@ void check_object_arrival(logger log, BucketKey &bucket_key, map<Bucket,
                             vector<TriggerPointer>> &bucket_triggers_map, vector<string> &active_triggers, 
                             vector<TriggerFunctionMetadata> &active_func_metadata);
 
-inline void release_shm_object();
+void release_shm_object();
 
 // void check_re_execution();
 

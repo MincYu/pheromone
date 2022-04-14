@@ -64,7 +64,7 @@ void check_object_arrival(logger log, BucketKey &bucket_key, map<Bucket,
 
 // input a key or a list of shared objects and remove them according to the status
 extern set<string> data_ready_to_clear;
-inline void release_shm_object() {
+void release_shm_object() {
   // remove shared memory captured in cache
   for (string obj_name : data_ready_to_clear) {
     ipc::shm::remove(obj_name.c_str());
