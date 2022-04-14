@@ -14,7 +14,7 @@
 #include "safe_ptr.hpp"
 
 
-enum RecvMsgType {Null, Call, DataResp, KvsGetResp, KvsPutResp};
+enum RecvMsgType {Null, Call, DataResp, KvsGetResp, KvsPutResp, NoticeRemoveObj};
 struct RecvMsg {
   RecvMsgType msg_type_;
   string app_name_;
@@ -128,6 +128,7 @@ class CommHelper : public CommHelperInterface {
       response_puller_(zmq::socket_t(context, ZMQ_PULL)),
       key_notify_puller_(zmq::socket_t(context, ZMQ_PULL)),
       update_status_puller_(zmq::socket_t(context, ZMQ_PULL)),
+      notice_remove_object_puller_(zmq::socket_t(context, ZMQ_PULL)),
       data_access_server_puller_(zmq::socket_t(context, ZMQ_PULL)),
       data_access_client_puller_(zmq::socket_t(context, ZMQ_PULL)),
       func_exec_puller_(zmq::socket_t(context, ZMQ_PULL)),
@@ -140,6 +141,7 @@ class CommHelper : public CommHelperInterface {
     key_notify_puller_.bind(ut_.notify_put_bind_address());
     
     update_status_puller_.bind(ut_.trigger_update_bind_address());
+    notice_remove_object_puller_.bind(ut_.notice_remove_object_bind_address());
     data_access_server_puller_.bind(ut_.data_access_server_bind_address());
     data_access_client_puller_.bind(ut_.data_access_client_bind_address());
     func_exec_puller_.bind(kBindBase + std::to_string(funcExecPort));
@@ -155,7 +157,8 @@ class CommHelper : public CommHelperInterface {
         {static_cast<void*>(update_status_puller_), 0, ZMQ_POLLIN, 0},
         {static_cast<void*>(func_exec_puller_), 0, ZMQ_POLLIN, 0},
         {static_cast<void*>(data_access_server_puller_), 0, ZMQ_POLLIN, 0},
-        {static_cast<void*>(data_access_client_puller_), 0, ZMQ_POLLIN, 0}
+        {static_cast<void*>(data_access_client_puller_), 0, ZMQ_POLLIN, 0},
+        {static_cast<void*>(notice_remove_object_puller_), 0, ZMQ_POLLIN, 0}
     };
 
     // set the request ID to 0
@@ -361,6 +364,22 @@ class CommHelper : public CommHelperInterface {
       comm_resps.push_back(resp);
     }
 
+    // handle remove notification from coordinators
+    if (zmq_pollitems_[4].revents & ZMQ_POLLIN) {
+      string serialized = kZmqUtil->recv_string(&notice_remove_object_puller_);
+      NoticeRemoveObjMessage msg;
+      msg.ParseFromString(serialized);
+      string ip = msg.ip();
+      set<string> terminated_session_cache;
+      for (const auto &session_id : msg.sessions()) {
+        RecvMsg resp;
+        terminated_session_cache.insert(session_id);
+        resp.msg_type_ = RecvMsgType::NoticeRemoveObj;
+        resp.session_id_ = session_id;
+        comm_resps.push_back(resp);
+      }
+    }
+
     get_kvs_responses(comm_resps);
 
     for (auto &resp_queue: resp_queues){
@@ -408,19 +427,6 @@ class CommHelper : public CommHelperInterface {
       kZmqUtil->send_string(serialized, &socket_cache_[ht.update_handler_connect_address()]);
     }
   }
-
-  // void notice_remove_obj(set<string> &session_cache) {
-  //   NoticeRemoveObjMessage msg;
-  //   msg.set_ip(ip_);
-  //   for (auto &session_id : session_cache) {
-  //     msg.add_sessions();
-  //   }
-  //   string serialized;
-  //   msg.SerializeToString(&serialized)
-  //   for (auto &ht : routing_threads_) {
-  //     kZmqUtil->send_string(serialized, &socket_cache_[ht.notify_handler_bind_address()]);
-  //   }
-  // }
 
   void forward_func_call(string &resp_address, string &app_name, vector<string> &func_name_vec, vector<vector<string>> &func_args_vec, int arg_flag, string &session_id) {
     FunctionCall forwardCall;
@@ -863,6 +869,7 @@ class CommHelper : public CommHelperInterface {
   zmq::socket_t response_puller_;
   zmq::socket_t key_notify_puller_;
   zmq::socket_t update_status_puller_;
+  zmq::socket_t notice_remove_object_puller_;
   zmq::socket_t data_access_server_puller_;
   zmq::socket_t data_access_client_puller_;
   zmq::socket_t func_exec_puller_;

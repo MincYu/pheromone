@@ -29,6 +29,8 @@ const unsigned TriggerUpdatePort = 7700;
 
 const unsigned updateStatusHandlerPort = 7750;
 
+const unsigned noticeRemoveObjectPort = 7800;
+
 const unsigned bucketQueryPort = 8150;
 const unsigned bucketUpdatePort = 8250;
 
@@ -99,6 +101,10 @@ class CommHelperThread {
   Address data_access_client_bind_address() const { return kBindBase + std::to_string(tid_ + dataAccessClientPort); }
 
   Address data_access_client_connect_address() const { return ip_base_ + std::to_string(tid_ + dataAccessClientPort); }
+
+  Address notice_remove_object_bind_address() const { return kBindBase + std::to_string(tid_ + noticeRemoveObjectPort); }
+
+  Address notice_remove_object_connect_address() const { return ip_base_ + std::to_string(tid_ + noticeRemoveObjectPort); }
 };
 
 class HandlerThread {

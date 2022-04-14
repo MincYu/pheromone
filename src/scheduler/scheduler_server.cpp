@@ -232,6 +232,15 @@ vector<string> check_trigger(logger log, BucketKey &bucket_key, string &session_
   return active_triggers;
 }
 
+void check_obj_ready_to_clear(string session_id) {
+  for (auto iter = key_len_map.begin(); iter !=  key_len_map.end(); ++iter) {
+    string obj_key = iter->first;
+    if (obj_key.substr(obj_key.size() - session_id.size()) == session_id) {
+      data_ready_to_clear.insert(obj_key);
+    }
+  }
+}
+
 
 void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned executor) {
   string log_file = "log_scheduler_" + std::to_string(thread_id) + ".txt";
@@ -460,13 +469,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
             // insert session id and oending to be sent to coordinator
             session_cache.insert(session_id);
             data_ready_to_clear.insert(obj_name);
-            // Search for intermediate data via obj_name[len-16:len]
-            for (auto iter = key_len_map.begin(); iter !=  key_len_map.end(); ++iter) {
-              string obj_key = iter->first;
-              if (obj_key.substr(obj_key.size() - session_id.size()) == session_id) {
-                data_ready_to_clear.insert(obj_key);
-              }
-            }
+            check_obj_ready_to_clear(session_id);
           }
         }
       }
@@ -618,6 +621,12 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
             send_to_executer(executor_chans_map[inflight_put_req.executor_id_], resp);
           }
           key_ksv_put_map.erase(comm_resp.data_key_);
+        }
+      }
+      else if (comm_resp.msg_type_ == RecvMsgType::NoticeRemoveObj) {
+        // search for objects only when session_id is not detected from local
+        if (session_cache.count(session_id) == 0) {
+          check_obj_ready_to_clear(session_id);
         }
       }
     }
