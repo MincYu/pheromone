@@ -20,6 +20,7 @@ def generate_timestamp(tid=1):
     return int(t * p + tid)
 
 default_rerun_timeout = 3000
+EVERY_OBJ = None
 
 class PheromoneClient():
     def __init__(self, mngt_ip, kvs_addr, ip, thread_id=0, context=None):
@@ -155,19 +156,23 @@ class PheromoneClient():
 
         req.primitive = prm.SerializeToString()
 
-        def parse_hints(req, hint):
+        def parse_hints(req, func_data, timeout):
             h = req.hints.add()
-            h.source_function = hint[0]
-            if hint[1] is not None:
-                h.source_key = hint[1]
-            h.timeout = hint[2] if len(hint) > 2 else default_rerun_timeout
+            h.source_function = func_data[0]
+            if func_data[1] != EVERY_OBJ:
+                h.source_key = func_data[1]
+            h.timeout = timeout
 
         if hints is not None: 
-            if isinstance(hints, tuple):
-                parse_hints(req, hints)
-            elif isinstance(hints, list):
-                for hint in hints:
-                    parse_hints(req, hint)
+            if len(hints) == 3:
+                parse_hints(req, hints[:1], hints[2])
+            elif len(hints) == 2 and isinstance(hints[0], list):
+                for hint in hints[0]:
+                    if isinstance(hint) == tuple and len(hint) == 2:
+                        parse_hints(req, hint, hints[1])
+                    else:
+                        logging.error('Unregnized hints {}'.format(hints))
+                        return False              
             else:
                 logging.error('Unregnized hints {}'.format(hints))
                 return False
