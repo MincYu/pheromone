@@ -7,7 +7,7 @@ WORKDIR /
 # under test
 # COPY . /pheromone
 # use github repo in building
-RUN git clone -b dev https://github.com/MincYu/pheromone.git
+RUN git clone -b shm_remove https://github.com/MincYu/pheromone.git
 
 WORKDIR $PHERO_HOME
 RUN apt-get update

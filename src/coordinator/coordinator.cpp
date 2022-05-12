@@ -226,29 +226,32 @@ void run(Address public_ip, Address private_ip, unsigned thread_id) {
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(report_end - report_start).count();
     if (duration >= CoordReportThreshold) {
       report_start = std::chrono::system_clock::now();
-      TODO remote out-of-data node status
+      // TODO remote out-of-data node status
       for (auto iter = node_status_map.begin(); iter !=  node_status_map.end(); ++iter) {
         Address addr = iter->first;
         // Maybe configure in configuration file instead later
         int schedularThreadCount = 1;
-        for (unsigned i = 0; i < schedularThreadCount; i++) {
-          // schedular use CommHelperThread to receive message
-          ut = CommHelperThread(addr, i);
-          NoticeRemoveObjMessage msg;
-          msg.set_ip(public_ip);
-          for (auto &session_id : terminated_session_cache) {
-            msg.add_sessions();
-          }
-          string serialized;
-          msg.SerializeToString(&serialized)
-          kZmqUtil->send_string(serialized, &pushers[ut.notice_remove_object_connect_address()]);
+        int sche_thread_id = 0;
+        // schedular use CommHelperThread to receive message
+        NoticeRemoveObjMessage msg;
+        msg.set_ip(public_ip);
+        for (auto &session_id : terminated_session_cache) {
+          msg.add_sessions();
         }
+        string serialized;
+        msg.SerializeToString(&serialized)
+        kZmqUtil->send_string(serialized, &pushers[get_remove_object_connect_address(addr, sche_thread_id)]);
       }
       terminated_session_cache.clear();
       log->info("Coordinator report. notify_count: {}, query_count: {}, call_count: {}", notify_count, query_count, call_count);
     }
 
   }
+}
+
+inline string get_remove_object_connect_address(string ip, unsigned io_thread){
+  const unsigned noticeRemoveObjectPort = 7850;
+  return "tcp://" + ip + ":" + std::to_string(noticeRemoveObjectPort + io_thread);
 }
 
 int main(int argc, char *argv[]) {

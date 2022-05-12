@@ -29,7 +29,7 @@ const unsigned TriggerUpdatePort = 7700;
 
 const unsigned updateStatusHandlerPort = 7750;
 
-const unsigned noticeRemoveObjectPort = 7800;
+const unsigned noticeRemoveObjectPort = 7850;
 
 const unsigned bucketQueryPort = 8150;
 const unsigned bucketUpdatePort = 8250;
