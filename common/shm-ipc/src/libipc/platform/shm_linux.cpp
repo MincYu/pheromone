@@ -12,6 +12,10 @@
 #include <utility>
 #include <cstring>
 
+#ifdef PHEROMONE_MEMORY_TRACE
+#include "memory_trace.hpp"
+#endif
+
 #include "libipc/shm.h"
 #include "libipc/def.h"
 #include "libipc/pool_alloc.h"
@@ -30,6 +34,10 @@ struct id_info_t {
     void*       mem_  = nullptr;
     std::size_t size_ = 0;
     ipc::string name_;
+#ifdef PHEROMONE_MEMORY_TRACE
+    std::size_t logical_size_ = 0;
+    bool trace_payload_ = false;
+#endif
 };
 
 constexpr std::size_t calc_size(std::size_t size) {
@@ -52,6 +60,9 @@ id_t acquire(char const * name, std::size_t size, unsigned mode) {
     }
     ipc::string op_name = ipc::string{"__IPC_SHM__"} + name;
     // Open the object for read-write access.
+#ifdef PHEROMONE_MEMORY_TRACE
+    auto logical_size = size; // The open-only path obtains the physical size from fstat.
+#endif
     int flag = O_RDWR;
     switch (mode) {
     case open:
@@ -75,6 +86,11 @@ id_t acquire(char const * name, std::size_t size, unsigned mode) {
         return nullptr;
     }
     auto ii = mem::alloc<id_info_t>();
+#ifdef PHEROMONE_MEMORY_TRACE
+    // Pheromone names payload objects bucket|key; IPC channels use a separate namespace.
+    ii->trace_payload_ = std::strchr(name, '|') != nullptr;
+    ii->logical_size_ = logical_size;
+#endif
     ii->fd_   = fd;
     ii->size_ = size;
     ii->name_ = std::move(op_name);
@@ -120,6 +136,13 @@ void * get_mem(id_t id, std::size_t * size) {
         ipc::error("fail mmap[%d]: %s, size = %zd\n", errno, ii->name_.c_str(), ii->size_);
         return nullptr;
     }
+#ifdef PHEROMONE_MEMORY_TRACE
+    if (ii->trace_payload_) {
+        struct stat st;
+        if (::fstat(fd, &st) != 0) throw std::runtime_error("cannot identify mapped payload");
+        TRACE_MEMORY("map", "", ii->name_.c_str(), id, ii->logical_size_, st.st_dev, st.st_ino);
+    }
+#endif
     ::close(fd);
     ii->fd_  = -1;
     ii->mem_ = mem;
@@ -134,6 +157,10 @@ void release(id_t id) {
         return;
     }
     auto ii = static_cast<id_info_t*>(id);
+#ifdef PHEROMONE_MEMORY_TRACE
+    if (ii->trace_payload_ && ii->mem_ != nullptr)
+        TRACE_MEMORY("unmap", "", "", id, 0);
+#endif
     if (ii->mem_ == nullptr || ii->size_ == 0) {
         ipc::error("fail release: invalid id (mem = %p, size = %zd)\n", ii->mem_, ii->size_);
     }

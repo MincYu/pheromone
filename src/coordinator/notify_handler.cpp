@@ -1,4 +1,5 @@
 #include "coord_handlers.hpp"
+#include "memory_trace.hpp"
 #include <sstream>
 #include <iterator>
 
@@ -45,6 +46,7 @@ void notify_handler(logger log, string &serialized, SocketCache &pushers,
       bucket_node_map[bucket_key.bucket_].insert(ip.substr(6, ip.find(":", 6) - 6));
       update_address(bucket_key, ip, bucket_key_address_map, log);
       bucket_key_val_map[bucket_key.shm_key_name()] = payload;
+      TRACE_MEMORY("cache_set", bucket_key.session_, bucket_key.shm_key_name(), &bucket_key_val_map, payload.size());
     }
     else{
       // it is reasonable to assume there is only a single address (i.e., request sender)

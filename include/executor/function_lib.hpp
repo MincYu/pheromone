@@ -2,6 +2,7 @@
 #define INCLUDE_EXECUTOR_FUNCTION_LIB_HPP_
 
 #include "common.hpp"
+#include "memory_trace.hpp"
 #include "requests.hpp"
 #include "kvs_threads.hpp"
 #include "types.hpp"
@@ -183,6 +184,7 @@ class UserLibrary : public UserLibraryInterface {
       //     shared_chan.wait_for_recv(1);
       // }
       
+      TRACE_COPY(packed, "packed_output", session_id_, function_, &req, data_packing ? data->get_size() : 0);
       bool send_res = shared_chan.send(req);
       if (!send_res) {
         std::cerr << "Send to executer failed.";

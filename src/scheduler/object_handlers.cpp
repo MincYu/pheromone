@@ -1,4 +1,5 @@
 #include "object_handlers.hpp"
+#include "memory_trace.hpp"
 #include <mutex>
 
 extern map<string, unsigned> key_len_map;
@@ -26,7 +27,9 @@ void release_shm_session(const string &session) {
         is_session_key(it->first, session)) {
       ipc::shm::remove(it->first.c_str());
       received_objects.erase(it->first);
-      key_val_map.erase(it->first);
+      if (key_val_map.erase(it->first)) {
+        TRACE_MEMORY("cache_clear", session, it->first, &key_val_map, 0);
+      }
       it = key_len_map.erase(it);
     }
     else ++it;

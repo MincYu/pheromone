@@ -1,4 +1,5 @@
 #include "object_handlers.hpp"
+#include "memory_trace.hpp"
 #include "comm_helper.hpp"
 #include "anna_client/kvs_client.hpp"
 #include "yaml-cpp/yaml.h"
@@ -198,6 +199,8 @@ void schedule_func_call(logger log, CommHelperInterface *helper, map<uint8_t, ui
     // log->info("No local executor available in scheduling.");
     if (schedDelayTime > 0){
       delay_call_queue.push(DelayFunctionCall{session_id, app_name, func_name, func_args, arg_flag, std::chrono::system_clock::now()});
+      TRACE_MEMORY("queued", session_id, func_name, &delay_call_queue.back(),
+                   arg_flag == 0 ? memory_trace::argument_bytes(func_args) : 0);
     }
     else {
       if (!rejectExtraReq) {
@@ -377,6 +380,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
           if (str[1] == 2) {
             if (is_data_packing == 1) {
               key_val_map[obj_name] = infos[5];
+              TRACE_MEMORY("cache_set", session_id, obj_name, &key_val_map, infos[5].size());
               set_shm_obj_size(obj_name, key_val_map[obj_name].size());
             }
             else if (is_data_packing == 2){
@@ -472,6 +476,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
               ipc::shm::release(shm_id);
             }
 
+            TRACE_COPY(response, "response", session_id, src_function, &output_data, output_data.size());
             helper->client_response(session_client_addr_map[session_id], func_app_map[src_function], output_data);
             set_shm_obj_size(obj_name, output_data.size());
             completed_sessions.insert(session_id);
@@ -642,6 +647,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
         schedule_func_call(log, helper, executor_status_map, function_executor_map, delay_call.session_id_, 
                             delay_call.app_name_, delay_call.func_name_, delay_call.func_args_, delay_call.arg_flag_);
         cur_avail_executors--;
+        TRACE_MEMORY("release", delay_call.session_id_, delay_call.func_name_, &delay_call_queue.front(), 0);
         delay_call_queue.pop();
       }
       auto cur_stamp = std::chrono::system_clock::now();
@@ -658,6 +664,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
             forward_call_via_helper(helper, delay_call.session_id_, delay_call.app_name_, 
                                 func_name_vec, func_args_vec, delay_call.arg_flag_);
           }
+          TRACE_MEMORY("release", delay_call.session_id_, delay_call.func_name_, &delay_call_queue.front(), 0);
           delay_call_queue.pop();
         }
         else{

@@ -1,4 +1,5 @@
 #include "coord_handlers.hpp"
+#include "memory_trace.hpp"
 #include "yaml-cpp/yaml.h"
 
 ZmqUtil zmq_util;
@@ -181,7 +182,10 @@ void run(Address public_ip, Address private_ip, unsigned thread_id) {
         for (const auto &session : msg.completed_sessions()) {
           collection.add_completed_sessions(session);
           for (auto it = bucket_key_val_map.begin(); it != bucket_key_val_map.end();) {
-            if (is_session_key(it->first, session)) it = bucket_key_val_map.erase(it);
+            if (is_session_key(it->first, session)) {
+              TRACE_MEMORY("cache_clear", session, it->first, &bucket_key_val_map, 0);
+              it = bucket_key_val_map.erase(it);
+            }
             else ++it;
           }
         }
