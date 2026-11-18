@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstddef>
 #include <atomic>
+#include <memory>
 #include "libipc/ipc.h"
 #include "libipc/shm.h"
 #include "capo/random.hpp"
@@ -17,7 +18,11 @@
 
 void copy_to_shm_obj(string &key_name, const char* data_src, unsigned data_size);
 
-pair<char*, unsigned> get_shm_obj(string &key_name);
+pair<std::shared_ptr<char>, unsigned> get_shm_obj(string &key_name);
+
+void set_shm_obj_size(const string &key_name, unsigned size);
+
+void release_shm_session(const string &session);
 
 void check_object_arrival(logger log, BucketKey &bucket_key, map<Bucket, 
                             vector<TriggerPointer>> &bucket_triggers_map, vector<string> &active_triggers, 

@@ -1,4 +1,5 @@
 #include "object_handlers.hpp"
+#include "memory_trace.hpp"
 #include "comm_helper.hpp"
 #include "anna_client/kvs_client.hpp"
 #include "yaml-cpp/yaml.h"
@@ -79,9 +80,20 @@ inline void send_to_executer(shm_chan_t* chan_ptr, string msg){
   }
 }
 
-map<string, uint8_t> data_clear_state_map; // state 0: created; 1: be using; 2: ready to clear
-inline void release_shm_object() {
-  // TODO clear the shared memory
+bool collect_session(const string &session, CommHelperInterface *helper) {
+  string message(1, 4);
+  message += session;
+  message.push_back('\0');
+  // Retry on the existing scheduler tick if an executor's channel is full.
+  bool delivered = true;
+  for (auto &executor : executor_chans_map) {
+    if (!executor.second->send(message)) delivered = false;
+  }
+  if (!delivered) return false;
+  release_shm_session(session);
+  helper->collect_session(session);
+  session_client_addr_map.erase(session);
+  return true;
 }
 
 void forward_call_via_helper(CommHelperInterface *helper, string &session_id, string &app_name, vector<string> &func_name_vec, 
@@ -104,6 +116,7 @@ void forward_call_via_helper(CommHelperInterface *helper, string &session_id, st
           auto shm_id = ipc::shm::acquire(key_name.c_str(), size_len, ipc::shm::open);
           auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
           string real_data(shm_ptr, size_len);
+          ipc::shm::release(shm_id);
           if (arg_flag == 1) {
             real_data_args.push_back(real_data);
           }
@@ -186,6 +199,8 @@ void schedule_func_call(logger log, CommHelperInterface *helper, map<uint8_t, ui
     // log->info("No local executor available in scheduling.");
     if (schedDelayTime > 0){
       delay_call_queue.push(DelayFunctionCall{session_id, app_name, func_name, func_args, arg_flag, std::chrono::system_clock::now()});
+      TRACE_MEMORY("queued", session_id, func_name, &delay_call_queue.back(),
+                   arg_flag == 0 ? memory_trace::argument_bytes(func_args) : 0);
     }
     else {
       if (!rejectExtraReq) {
@@ -260,6 +275,8 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
   map<string, string> bucket_app_map;
 
   set<string> function_cache;
+  set<string> completed_sessions;
+  set<string> pending_collections;
   map<string, uint32_t> function_len_map;
   map<string, set<uint8_t>> function_executor_map;
   
@@ -363,11 +380,12 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
           if (str[1] == 2) {
             if (is_data_packing == 1) {
               key_val_map[obj_name] = infos[5];
-              key_len_map[obj_name] = key_val_map[obj_name].size();
+              TRACE_MEMORY("cache_set", session_id, obj_name, &key_val_map, infos[5].size());
+              set_shm_obj_size(obj_name, key_val_map[obj_name].size());
             }
             else if (is_data_packing == 2){
               int size_int = stoi(infos[5]);
-              key_len_map[obj_name] = size_int;
+              set_shm_obj_size(obj_name, size_int);
             }
             
             string app_name = func_app_map[src_function];
@@ -381,7 +399,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
                 arg_flag = 0;
               }
               else if (is_data_packing == 2){
-                func_args = {obj_name, infos[5]};
+                func_args = {bucket, session_key, infos[5]};
               }
 
               if (tgt_function.empty()){
@@ -455,10 +473,14 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
               auto shm_id = ipc::shm::acquire(obj_name.c_str(), size_int, ipc::shm::open);
               auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
               output_data = string(shm_ptr, size_int);
+              ipc::shm::release(shm_id);
             }
 
+            TRACE_COPY(response, "response", session_id, src_function, &output_data, output_data.size());
             helper->client_response(session_client_addr_map[session_id], func_app_map[src_function], output_data);
-            // TODO remove output data
+            set_shm_obj_size(obj_name, output_data.size());
+            completed_sessions.insert(session_id);
+            pending_collections.insert(session_id);
           }
         }
       }
@@ -531,7 +553,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
         }
       }
       else if (comm_resp.msg_type_ == RecvMsgType::DataResp){
-        key_len_map[comm_resp.data_key_] = comm_resp.data_size_;
+        set_shm_obj_size(comm_resp.data_key_, comm_resp.data_size_);
         // check if there is any waiting get request
         if (key_remote_get_map.find(comm_resp.data_key_) != key_remote_get_map.end()){
           for (auto &inflight_get_req : key_remote_get_map[comm_resp.data_key_]){
@@ -575,7 +597,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
       }
       else if (comm_resp.msg_type_ == RecvMsgType::KvsGetResp){
         string local_obj_name = kvsKeyPrefix + "|" + comm_resp.data_key_;
-        key_len_map[local_obj_name] = comm_resp.data_size_;
+        set_shm_obj_size(local_obj_name, comm_resp.data_size_);
         // TODO clear kvs object
 
         if (key_remote_get_map.find(local_obj_name) != key_remote_get_map.end()){
@@ -594,6 +616,9 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
           }
           key_remote_get_map.erase(local_obj_name);
         }
+      }
+      else if (comm_resp.msg_type_ == RecvMsgType::SessionComplete) {
+        pending_collections.insert(comm_resp.session_id_);
       }
       else if (comm_resp.msg_type_ == RecvMsgType::KvsPutResp){
         if (key_ksv_put_map.find(comm_resp.data_key_) != key_ksv_put_map.end()){
@@ -622,6 +647,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
         schedule_func_call(log, helper, executor_status_map, function_executor_map, delay_call.session_id_, 
                             delay_call.app_name_, delay_call.func_name_, delay_call.func_args_, delay_call.arg_flag_);
         cur_avail_executors--;
+        TRACE_MEMORY("release", delay_call.session_id_, delay_call.func_name_, &delay_call_queue.front(), 0);
         delay_call_queue.pop();
       }
       auto cur_stamp = std::chrono::system_clock::now();
@@ -638,6 +664,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
             forward_call_via_helper(helper, delay_call.session_id_, delay_call.app_name_, 
                                 func_name_vec, func_args_vec, delay_call.arg_flag_);
           }
+          TRACE_MEMORY("release", delay_call.session_id_, delay_call.func_name_, &delay_call_queue.front(), 0);
           delay_call_queue.pop();
         }
         else{
@@ -663,7 +690,12 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
       }
 
       // TODO update function locations
-      helper->update_status(get_avail_executor_num(executor_status_map), function_cache);
+      helper->update_status(get_avail_executor_num(executor_status_map), function_cache, completed_sessions);
+      completed_sessions.clear();
+      for (auto it = pending_collections.begin(); it != pending_collections.end();) {
+        if (collect_session(*it, helper)) it = pending_collections.erase(it);
+        else ++it;
+      }
 
       report_start = std::chrono::system_clock::now();
     }

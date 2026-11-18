@@ -12,6 +12,7 @@
 #include <dlfcn.h>
 
 #include "function_lib.hpp"
+#include "memory_trace.hpp"
 #include "yaml-cpp/yaml.h"
 
 
@@ -83,8 +84,12 @@ void run(Address ip, unsigned thread_id) {
     auto str = static_cast<char*>(dd.data());
     
     if (str != nullptr) {
+      // Collection is processed after the current handler returns.
+      if (str[0] == 4) {
+        static_cast<UserLibrary*>(user_lib)->collect_session(string(str + 1));
+      }
       // function call
-      if (str[0] == 1){
+      else if (str[0] == 1){
         auto recv_stamp = std::chrono::system_clock::now();
         update_status(thread_id, true);
 
@@ -99,6 +104,13 @@ void run(Address ip, unsigned thread_id) {
         func_with_args.erase(func_with_args.begin());
         
         string func_name = func_with_args[0];
+#ifdef PHEROMONE_MEMORY_TRACE
+        // Only inline calls carry payload in the received message and its decoded copies.
+        auto bytes = arg_flag == 0 ? memory_trace::argument_bytes(func_with_args, 1) : 0;
+        TRACE_COPY(received, "received", session_id, func_name, &dd, bytes);
+        TRACE_COPY(decoded, "decoded_message", session_id, func_name, &msg, bytes);
+        TRACE_COPY(fields, "decoded_fields", session_id, func_name, &func_with_args, bytes);
+#endif
         // int func_id = stoi(func_with_args[1]);
         // std::cout << "Received function call " << func_name << "\n" << std::flush;
 
@@ -116,6 +128,7 @@ void run(Address ip, unsigned thread_id) {
 
         int arg_size;
         char ** arg_values;
+        vector<ipc::shm::id_t> input_mappings;
         if (arg_flag == 0){
           // We parse plain args with splitter
           arg_size = func_with_args.size() - 1;
@@ -127,6 +140,7 @@ void run(Address ip, unsigned thread_id) {
             std::copy(func_with_args[index_in_func_args].begin(), func_with_args[index_in_func_args].end(), arg_v);
             arg_v[arg_size_in_bytes] = '\0';
             arg_values[i] = arg_v;
+            TRACE_MEMORY("input", session_id, func_name, arg_v, arg_size_in_bytes);
             static_cast<UserLibrary*>(user_lib)->add_arg_size(arg_size_in_bytes);
           }
         }
@@ -146,6 +160,7 @@ void run(Address ip, unsigned thread_id) {
               auto shm_obj_size = stoi(func_with_args[i + 2]);
               auto shm_id = ipc::shm::acquire(key_name.c_str(), shm_obj_size, ipc::shm::open);
               auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
+              input_mappings.push_back(shm_id);
               if (arg_flag == 1) {
                 arg_values[i/3] = shm_ptr;
                 static_cast<UserLibrary*>(user_lib)->add_arg_size(shm_obj_size);
@@ -178,6 +193,7 @@ void run(Address ip, unsigned thread_id) {
 
         int exit_signal = 1;
 
+        TRACE_MEMORY("function_begin", session_id, func_name, user_lib, 0);
         try{
           exit_signal = name_func_map[func_name](user_lib, arg_size, arg_values);
         }
@@ -194,10 +210,24 @@ void run(Address ip, unsigned thread_id) {
           std::cerr << "Function " << func_name << " throws other type" << std::endl;
         }
 
+        TRACE_MEMORY("function_end", session_id, func_name, user_lib, 0);
         if (exit_signal != 0){
           std::cerr << "Function " << func_name << " exits with error " << exit_signal << std::endl;
           log->warn("Function {} exits with error {}", func_name, exit_signal);
         }
+        // Arguments belong to this invocation; the shared objects outlive it.
+        if (arg_flag == 0) {
+          for (int i = 0; i < arg_size; i++) {
+            TRACE_MEMORY("release", session_id, func_name, arg_values[i], 0);
+            delete[] arg_values[i];
+          }
+        }
+        else if (arg_flag == 2) {
+          for (int i = 0; i < arg_size; i += 2) delete[] arg_values[i];
+        }
+        delete[] arg_values;
+        for (auto shm_id : input_mappings) ipc::shm::release(shm_id);
+
         auto execute_stamp = std::chrono::system_clock::now();
         static_cast<UserLibrary*>(user_lib)->clear_session();
 

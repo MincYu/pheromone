@@ -1,24 +1,56 @@
 #include "object_handlers.hpp"
+#include "memory_trace.hpp"
+#include <mutex>
 
 extern map<string, unsigned> key_len_map;
 extern map<string, string> key_val_map;
 
-void copy_to_shm_obj(string &key_name, const char* data_src, unsigned data_size){
-  auto shm_id = ipc::shm::acquire(key_name.c_str(), data_size);
-  auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
-  memcpy(shm_ptr, data_src, data_size);
+std::mutex object_mutex;
+map<string, std::shared_ptr<char>> received_objects;
+
+std::shared_ptr<char> map_shm_obj(const string &name, unsigned size, bool create) {
+  auto id = ipc::shm::acquire(name.c_str(), size, create ? ipc::shm::create | ipc::shm::open : ipc::shm::open);
+  if (id == nullptr) return {};
+  return std::shared_ptr<char>(static_cast<char*>(ipc::shm::get_mem(id, nullptr)),
+                              [id](char*) { ipc::shm::release(id); });
 }
 
-pair<char*, unsigned> get_shm_obj(string &key_name){
+void set_shm_obj_size(const string &key_name, unsigned size) {
+  std::lock_guard<std::mutex> lock(object_mutex);
+  key_len_map[key_name] = size;
+}
+
+void release_shm_session(const string &session) {
+  std::lock_guard<std::mutex> lock(object_mutex);
+  for (auto it = key_len_map.begin(); it != key_len_map.end();) {
+    if (it->first.compare(0, kvsKeyPrefix.size() + 1, kvsKeyPrefix + kDelimiter) != 0 &&
+        is_session_key(it->first, session)) {
+      ipc::shm::remove(it->first.c_str());
+      received_objects.erase(it->first);
+      if (key_val_map.erase(it->first)) {
+        TRACE_MEMORY("cache_clear", session, it->first, &key_val_map, 0);
+      }
+      it = key_len_map.erase(it);
+    }
+    else ++it;
+  }
+}
+
+void copy_to_shm_obj(string &key_name, const char* data_src, unsigned data_size){
+  auto object = map_shm_obj(key_name, data_size, true);
+  memcpy(object.get(), data_src, data_size);
+  std::lock_guard<std::mutex> lock(object_mutex);
+  received_objects[key_name] = std::move(object);
+}
+
+pair<std::shared_ptr<char>, unsigned> get_shm_obj(string &key_name){
+  std::lock_guard<std::mutex> lock(object_mutex);
   if (key_len_map.find(key_name) != key_len_map.end()){
     auto size_of_obj = key_len_map[key_name];
-    auto shm_id = ipc::shm::acquire(key_name.c_str(), size_of_obj, ipc::shm::open);
-    auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
-    return std::make_pair(shm_ptr, size_of_obj);
+    auto object = map_shm_obj(key_name, size_of_obj, false);
+    if (object) return std::make_pair(std::move(object), size_of_obj);
   }
-  else {
-    return std::make_pair(nullptr, 0);
-  }
+  return {nullptr, 0};
 } 
 
 void check_object_arrival(logger log, BucketKey &bucket_key, map<Bucket, 
