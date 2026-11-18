@@ -175,6 +175,22 @@ void run(Address public_ip, Address private_ip, unsigned thread_id) {
       
       string ip = msg.ip();
       int avail_executors = msg.avail_executors();
+      if (!msg.completed_sessions().empty()) {
+        UpdateCoordMsg collection;
+        collection.set_msg_type(3);
+        for (const auto &session : msg.completed_sessions()) {
+          collection.add_completed_sessions(session);
+          for (auto it = bucket_key_val_map.begin(); it != bucket_key_val_map.end();) {
+            if (is_session_key(it->first, session)) it = bucket_key_val_map.erase(it);
+            else ++it;
+          }
+        }
+        // The completion notification reaches every worker that may hold objects.
+        for (const auto &node : node_status_map) {
+          string address = "tcp://" + node.first + ":" + std::to_string(TriggerUpdatePort);
+          send_request(collection, pushers[address]);
+        }
+      }
       set<string> functions;
       for (const auto &func : msg.functions()){
         functions.insert(func);

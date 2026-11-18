@@ -8,6 +8,7 @@
 #include "trigger.hpp"
 #include "operation.pb.h"
 #include "cpp_function.hpp"
+#include <memory>
 
 using shm_chan_t = ipc::chan<ipc::relat::multi, ipc::relat::multi, ipc::trans::unicast>;
 
@@ -104,7 +105,14 @@ class UserLibrary : public UserLibraryInterface {
       persist_flag_ = persist_flag;
     }
     
+    void collect_session(const string &session) {
+      if (session == session_id_) collect_current_session_ = true;
+      else session_objects_.erase(session);
+    }
+
     void clear_session(){
+      if (collect_current_session_) session_objects_.erase(session_id_);
+      collect_current_session_ = false;
       function_ = emptyString;
       session_id_ = emptyString;
       persist_flag_ = 0;
@@ -121,7 +129,7 @@ class UserLibrary : public UserLibraryInterface {
     }
 
     EpheObject* create_object(string bucket, string key, size_t size = 1024 * 1024) {
-      return new EpheObjectImpl(bucket, key, session_id_, size, true);
+      return own(new EpheObjectImpl(bucket, key, session_id_, size, true));
     }
 
     EpheObject* create_object(size_t size = 1024 * 1024) {
@@ -131,7 +139,7 @@ class UserLibrary : public UserLibraryInterface {
 
     EpheObject* create_object(string target_function, bool many_to_one_trigger = true, size_t size = 1024 * 1024) {
       if (many_to_one_trigger) {
-        return new EpheObjectImpl(function_, target_function, session_id_, size);
+        return own(new EpheObjectImpl(function_, target_function, session_id_, size));
       }
       else {
         return create_object("b_" + target_function, gen_unique_key(), size);
@@ -187,7 +195,7 @@ class UserLibrary : public UserLibraryInterface {
       }
 
       if (send_res && wait_res) {
-        auto recv_dd = local_chan->recv(30000); // 30-second timeout
+        auto recv_dd = receive_response();
         auto recv_str = static_cast<char*>(recv_dd.data());
 
         if (recv_str == nullptr) {
@@ -224,7 +232,7 @@ class UserLibrary : public UserLibraryInterface {
           shared_chan.wait_for_recv(1);
       }
 
-      auto recv_dd = local_chan->recv(30000); // 30-second timeout
+      auto recv_dd = receive_response();
       auto recv_str = static_cast<char*>(recv_dd.data());
 
       if (recv_str == nullptr) {
@@ -246,7 +254,7 @@ class UserLibrary : public UserLibraryInterface {
       }
 
       auto size_len = stoi(string(recv_str + 3));
-      return new EpheObjectImpl(obj_name, size_len, false);
+      return own(new EpheObjectImpl(obj_name, size_len, false));
     }
 
     string gen_unique_key(){
@@ -254,6 +262,25 @@ class UserLibrary : public UserLibraryInterface {
     }
 
   private:
+    // GC notifications share the response channel and may arrive during an RPC.
+    ipc::buff_t receive_response() {
+      auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+      while (true) {
+        auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+            deadline - std::chrono::steady_clock::now()).count();
+        if (remaining <= 0) return {};
+        auto response = local_chan->recv(remaining);
+        auto data = static_cast<char*>(response.data());
+        if (data == nullptr || data[0] != 4) return response;
+        collect_session(string(data + 1));
+      }
+    }
+
+    EpheObjectImpl* own(EpheObjectImpl *object) {
+      session_objects_[session_id_].emplace_back(object);
+      return object;
+    }
+
     uint8_t get_request_id() {
       if (++rid_ % 100 == 0) {
         rid_ = 0;
@@ -274,6 +301,9 @@ class UserLibrary : public UserLibraryInterface {
     string session_id_;
     uint8_t persist_flag_;
     vector<size_t> size_of_args_;
+    // Keep objects available to downstream functions until workflow completion.
+    map<string, vector<std::unique_ptr<EpheObjectImpl>>> session_objects_;
+    bool collect_current_session_ = false;
 };
 
 #endif  // INCLUDE_EXECUTOR_FUNCTION_LIB_HPP_

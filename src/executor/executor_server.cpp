@@ -83,8 +83,12 @@ void run(Address ip, unsigned thread_id) {
     auto str = static_cast<char*>(dd.data());
     
     if (str != nullptr) {
+      // Collection is processed after the current handler returns.
+      if (str[0] == 4) {
+        static_cast<UserLibrary*>(user_lib)->collect_session(string(str + 1));
+      }
       // function call
-      if (str[0] == 1){
+      else if (str[0] == 1){
         auto recv_stamp = std::chrono::system_clock::now();
         update_status(thread_id, true);
 
