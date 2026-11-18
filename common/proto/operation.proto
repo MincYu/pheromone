@@ -279,6 +279,8 @@ message UpdateStatusMessage {
   uint32 avail_executors = 2;
 
   repeated string functions = 3;
+
+  repeated string completed_sessions = 4;
 }
 
 message TriggerEntity {
@@ -311,4 +313,6 @@ message UpdateCoordMsg {
   repeated TriggerEntity triggers = 6;
 
   uint32 msg_type = 7;
+
+  repeated string completed_sessions = 8;
 }

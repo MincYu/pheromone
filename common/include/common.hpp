@@ -27,6 +27,11 @@ const string bucketNameDirectInvoc = "direct_invoc";
 const string emptyString = string();
 const string kvsKeyPrefix = "KVS";
 
+inline bool is_session_key(const string &key, const string &session) {
+  return !session.empty() && key.size() >= session.size() &&
+         key.compare(key.size() - session.size(), session.size(), session) == 0;
+}
+
 inline string get_key_session_name(string key, string session){
   return key + session;
 }

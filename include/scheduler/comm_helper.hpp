@@ -14,7 +14,7 @@
 #include "safe_ptr.hpp"
 
 
-enum RecvMsgType {Null, Call, DataResp, KvsGetResp, KvsPutResp};
+enum RecvMsgType {Null, Call, DataResp, KvsGetResp, KvsPutResp, SessionComplete};
 struct RecvMsg {
   RecvMsgType msg_type_;
   string app_name_;
@@ -74,7 +74,7 @@ zmq::context_t context(8);
 std::hash<string> hasher;
 
 typedef void (* CopyFunction)(string&, const char*, unsigned);
-typedef pair<char*, unsigned> (* GetFunction)(string&);
+typedef pair<std::shared_ptr<char>, unsigned> (* GetFunction)(string&);
 
 
 inline bool send_no_block_msg(zmq::socket_t* socket, zmq::message_t& message){
@@ -100,7 +100,8 @@ class CommHelperInterface {
   virtual void notify_put(const BucketKey& bucket_key, vector<string> &active_triggers, const string& resp_address, const string& payload=emptyString) = 0;
   
   virtual void set_logger(logger log) = 0;
-  virtual void update_status(int avail_executors, set<string> &function_cache) = 0;
+  virtual void collect_session(const string &session) = 0;
+  virtual void update_status(int avail_executors, set<string> &function_cache, const set<string> &completed_sessions) = 0;
   virtual vector<RecvMsg> try_recv_msg(map<Bucket, vector<TriggerPointer>> &bucket_triggers_map, map<string, AppInfo> &app_info_map, 
                               map<string, string> &func_app_map, map<string, string> &bucket_app_map, map<string, vector<RerunTriggerTimeout>> &func_trigger_timeout_map) = 0;
   virtual void forward_func_call(string &resp_address, string &app_name, vector<string> &func_name_vec, vector<vector<string>> &func_args_vec, int arg_flag, string &session_id) = 0;
@@ -320,6 +321,14 @@ class CommHelper : public CommHelperInterface {
           }
         }
       }
+      else if (update_msg_type == 3) {
+        for (const auto &session : coord_msg.completed_sessions()) {
+          RecvMsg resp;
+          resp.msg_type_ = RecvMsgType::SessionComplete;
+          resp.session_id_ = session;
+          comm_resps.push_back(resp);
+        }
+      }
       else if (update_msg_type == 2) {
         // delete triggers
         for (const auto &trigger : coord_msg.triggers()) {
@@ -387,10 +396,24 @@ class CommHelper : public CommHelperInterface {
     send_request(client_resp, socket_cache_[resp_address]);
   }
 
-  void update_status(int avail_executors, set<string> &function_cache) {
+  void collect_session(const string &session) {
+    auto addresses = sf::xlock_safe_ptr(key_address_cache_);
+    for (auto it = addresses->begin(); it != addresses->end();) {
+      if (is_session_key(it->first, session)) it = addresses->erase(it);
+      else ++it;
+    }
+    auto requestors = sf::xlock_safe_ptr(key_requestor_map_);
+    for (auto it = requestors->begin(); it != requestors->end();) {
+      if (is_session_key(it->first, session)) it = requestors->erase(it);
+      else ++it;
+    }
+  }
+
+  void update_status(int avail_executors, set<string> &function_cache, const set<string> &completed_sessions) {
     UpdateStatusMessage msg;
     msg.set_ip(ip_);
     msg.set_avail_executors(avail_executors);
+    for (const auto &session : completed_sessions) msg.add_completed_sessions(session);
     for (auto &function : function_cache){
       msg.add_functions(function);
     }
@@ -623,7 +646,7 @@ class CommHelper : public CommHelperInterface {
       auto msg_len = key_len + data_info_pair.second + 1;
       zmq::message_t msg(msg_len);
       memcpy(msg.data(), msg_head.c_str(), key_len + 1);
-      memcpy(static_cast<char*>(msg.data()) + key_len + 1, data_info_pair.first, data_info_pair.second);
+      memcpy(static_cast<char*>(msg.data()) + key_len + 1, data_info_pair.first.get(), data_info_pair.second);
 
       auto send_stamp = std::chrono::duration_cast<std::chrono::microseconds>(
           std::chrono::system_clock::now().time_since_epoch()).count();
@@ -741,13 +764,9 @@ class CommHelper : public CommHelperInterface {
    * other assistant methods
    */
   string get_key_address(const string &key) {
-    if (key_address_cache_->find(key) == key_address_cache_->end()) {
-      return "";
-    }
-    else {
-      // return *(next(begin(key_address_cache_[key]), rand_r(&seed_) % key_address_cache_[key].size()));
-      return key_address_cache_->at(key);
-    }
+    auto addresses = sf::xlock_safe_ptr(key_address_cache_);
+    auto it = addresses->find(key);
+    return it == addresses->end() ? emptyString : it->second;
   }
 
   string get_data_server_addr(string key_name, bool exclude_main_thread = false){
