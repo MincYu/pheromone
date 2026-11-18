@@ -116,6 +116,7 @@ void run(Address ip, unsigned thread_id) {
 
         int arg_size;
         char ** arg_values;
+        vector<ipc::shm::id_t> input_mappings;
         if (arg_flag == 0){
           // We parse plain args with splitter
           arg_size = func_with_args.size() - 1;
@@ -146,6 +147,7 @@ void run(Address ip, unsigned thread_id) {
               auto shm_obj_size = stoi(func_with_args[i + 2]);
               auto shm_id = ipc::shm::acquire(key_name.c_str(), shm_obj_size, ipc::shm::open);
               auto shm_ptr = static_cast<char*>(ipc::shm::get_mem(shm_id, nullptr));
+              input_mappings.push_back(shm_id);
               if (arg_flag == 1) {
                 arg_values[i/3] = shm_ptr;
                 static_cast<UserLibrary*>(user_lib)->add_arg_size(shm_obj_size);
@@ -198,6 +200,16 @@ void run(Address ip, unsigned thread_id) {
           std::cerr << "Function " << func_name << " exits with error " << exit_signal << std::endl;
           log->warn("Function {} exits with error {}", func_name, exit_signal);
         }
+        // Arguments belong to this invocation; the shared objects outlive it.
+        if (arg_flag == 0) {
+          for (int i = 0; i < arg_size; i++) delete[] arg_values[i];
+        }
+        else if (arg_flag == 2) {
+          for (int i = 0; i < arg_size; i += 2) delete[] arg_values[i];
+        }
+        delete[] arg_values;
+        for (auto shm_id : input_mappings) ipc::shm::release(shm_id);
+
         auto execute_stamp = std::chrono::system_clock::now();
         static_cast<UserLibrary*>(user_lib)->clear_session();
 
