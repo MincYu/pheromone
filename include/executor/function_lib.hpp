@@ -84,7 +84,6 @@ class UserLibrary : public UserLibraryInterface {
   public:
     UserLibrary(string ip, unsigned thread_id) {
       ip_number_ = ip;
-      ip_number_.erase(std::remove(ip_number_.begin(), ip_number_.end(), '.'), ip_number_.end());
       chan_id_ = static_cast<uint8_t>(thread_id + 1);
       rid_ = 0;
       object_id_ = 0;
@@ -133,8 +132,7 @@ class UserLibrary : public UserLibraryInterface {
     }
 
     EpheObject* create_object(size_t size = 1024 * 1024) {
-      string key = std::to_string(chan_id_) + "_" + std::to_string(get_object_id());
-      return create_object(bucketNameDirectInvoc, key, size);
+      return create_object(bucketNameDirectInvoc, gen_unique_key(), size);
     }
 
     EpheObject* create_object(string target_function, bool many_to_one_trigger = true, size_t size = 1024 * 1024) {
