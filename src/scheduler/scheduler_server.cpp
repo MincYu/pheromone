@@ -395,7 +395,7 @@ void run(CommHelperInterface *helper, Address ip, unsigned thread_id, unsigned e
                 arg_flag = 0;
               }
               else if (is_data_packing == 2){
-                func_args = {obj_name, infos[5]};
+                func_args = {bucket, session_key, infos[5]};
               }
 
               if (tgt_function.empty()){
